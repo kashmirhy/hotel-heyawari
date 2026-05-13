@@ -1,0 +1,3368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ホテル部屋割りシステム</title>
+
+<!-- ============================================================
+  🔧 FIREBASE 設定 — ここだけ書き換えてください
+  Firebase Console → プロジェクト設定 → マイアプリ → SDK設定
+  の「firebaseConfig」の内容をそのまま貼り付けてください
+============================================================ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, set, onValue, get }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  const firebaseConfig = {
+  apiKey: "AIzaSyBfxwRartxzPNxn-neteVVUzaoaQ7Thd9A",
+  authDomain: "hotel-heyawari.firebaseapp.com",
+  databaseURL: "https://hotel-heyawari-default-rtdb.firebaseio.com",
+  projectId: "hotel-heyawari",
+  storageBucket: "hotel-heyawari.firebasestorage.app",
+  messagingSenderId: "315023149003",
+  appId: "1:315023149003:web:034d2b9a4050ed3d2ed84e",
+  measurementId: "G-CWN8479P7C"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+  const DATA_REF = ref(db, 'hotelData/v1');
+
+  // グローバルに公開（モジュール外のコードから使えるように）
+  window.__firebase = { db, ref, set, onValue, get, DATA_REF };
+</script>
+<!-- ============================================================ -->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Shippori+Mincho:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf8;
+    --surface2: #f0ebe0;
+    --border: #d4c9b0;
+    --border-dark: #b8aa8a;
+    --accent: #7a5c2e;
+    --accent-light: #c49a4a;
+    --accent-pale: #f0e4c8;
+    --text: #2c2318;
+    --text-muted: #7a6a50;
+    --unassigned-bg: #fef9f0;
+    --room-bg: #fffdf8;
+    --room-hover: #fdf5e6;
+    --drag-over: #e8f4e8;
+    --drag-over-border: #5a9e5a;
+    --occupied: #fff8e8;
+    --occupied-border: #c49a4a;
+    --shadow: 0 2px 8px rgba(120,90,46,0.10);
+    --shadow-card: 0 2px 12px rgba(120,90,46,0.13);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(80,50,10,0.18);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.25rem;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 .sub {
+    font-size: 0.75rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    opacity: 0.75;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 5px;
+    border: none;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+  }
+  .btn-white {
+    background: #fff;
+    color: var(--accent);
+    border: 1.5px solid rgba(255,255,255,0.6);
+  }
+  .btn-white:hover { background: var(--accent-pale); }
+  .btn-outline {
+    background: transparent;
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.55);
+  }
+  .btn-outline:hover { background: rgba(255,255,255,0.12); }
+  .btn-danger {
+    background: #c0392b;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+  }
+  .btn-danger:hover { background: #a93226; }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 0.76rem;
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    height: calc(100vh - 54px);
+  }
+
+  /* 未割当パネル */
+  .unassigned-panel {
+    background: var(--unassigned-bg);
+    border-right: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1.5px solid var(--border);
+    background: var(--surface2);
+  }
+  .panel-header h2 {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .panel-header .count-badge {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 12px;
+    padding: 1px 9px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-left: 8px;
+  }
+
+  .csv-import {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .csv-import label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .csv-import input[type=file] {
+    font-size: 0.78rem;
+    color: var(--text);
+  }
+  .csv-note {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .csv-note a {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .unassigned-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .unassigned-list.drag-over {
+    background: var(--drag-over);
+    border: 2px dashed var(--drag-over-border);
+    border-radius: 6px;
+  }
+
+  /* 部屋エリア */
+  .rooms-area {
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--bg);
+  }
+
+  .rooms-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .rooms-toolbar h2 {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+  }
+
+  .date-picker {
+    padding: 5px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+
+  .room-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  /* ゲストカード */
+  .guest-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: grab;
+    transition: all 0.15s;
+    box-shadow: var(--shadow);
+    user-select: none;
+    position: relative;
+  }
+  /* 食事条件別背景色 */
+  .guest-card.meal-dinner     { background: #f0faf2; border-color: #a8d8b0; } /* 夕食のみ：薄グリーン */
+  .guest-card.meal-breakfast  { background: #f0f4ff; border-color: #b8c8f0; } /* 朝食のみ：薄青 */
+  .guest-card.meal-both       { background: #fff0f0; border-color: #f5b8b8; } /* 朝夕食あり：薄赤 */
+  .guest-card.meal-none       { background: #f5f5f5; border-color: #d8d8d8; } /* 素泊まり：薄灰 */
+  .guest-card:active { cursor: grabbing; }
+  .guest-card.dragging {
+    opacity: 0.45;
+    transform: scale(0.97);
+  }
+  .guest-card.drag-preview {
+    opacity: 0.98;
+    box-shadow: 0 6px 24px rgba(120,90,46,0.22);
+    transform: rotate(1.5deg) scale(1.03);
+  }
+
+  .guest-card .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 7px;
+  }
+  .guest-card .name {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .guest-card .nights-badge {
+    background: var(--accent-pale);
+    color: var(--accent);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .guest-card .card-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 8px;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .guest-card .meta-item {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .guest-card .meta-label {
+    color: var(--border-dark);
+    flex-shrink: 0;
+    font-size: 0.68rem;
+  }
+  .guest-card .meta-value {
+    color: var(--text);
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .guest-card .card-tags {
+    margin-top: 7px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .tag {
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 0.67rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .tag-dinner { background: #fff0dc; color: #a06c00; }
+  .tag-breakfast { background: #e8f5e9; color: #2e7d32; }
+  .tag-source { background: #e8eaf6; color: #3949ab; }
+
+  .guest-card .remove-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--border-dark);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    display: none;
+  }
+  .room-card .guest-card:hover .remove-btn { opacity: 1; display: block; }
+  .room-card .guest-card .remove-btn:hover { color: #c0392b; background: #fdecea; }
+
+  /* 未割当エリアの削除ボタン */
+  .guest-card .delete-guest-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.15s;
+    line-height: 1;
+  }
+  .unassigned-list .guest-card:hover .delete-guest-btn { opacity: 1; }
+  .guest-card .delete-guest-btn:hover { color: #c0392b; background: #fdecea; }
+
+  /* コピー・統合ボタン */
+  .guest-card .copy-guest-btn,
+  .guest-card .merge-guest-btn {
+    position: absolute;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: all 0.15s;
+    line-height: 1;
+    color: var(--text-muted);
+  }
+  .guest-card .copy-guest-btn  { bottom: 5px; right: 26px; }
+  .guest-card .merge-guest-btn { bottom: 5px; right: 5px; }
+  .guest-card .split-guest-btn {
+    position: absolute;
+    bottom: 5px; right: 47px;
+    background: none; border: none;
+    cursor: pointer; font-size: 0.78rem;
+    padding: 2px 4px; border-radius: 3px;
+    opacity: 0; transition: all 0.15s;
+    line-height: 1; color: var(--text-muted);
+  }
+  .guest-card:hover .split-guest-btn { opacity: 1; }
+  .guest-card .split-guest-btn:hover { color: #b07000; background: #fff8e0; }
+  .guest-card:hover .copy-guest-btn,
+  .guest-card:hover .merge-guest-btn { opacity: 1; }
+  .guest-card .copy-guest-btn:hover  { color: var(--accent); background: var(--accent-pale); }
+  .guest-card .merge-guest-btn:hover { color: #7b52a8; background: #f0eaff; }
+
+  /* 部屋カード */
+  .room-card {
+    background: var(--room-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.15s, background 0.15s;
+    min-height: 120px;
+  }
+  .room-card.drag-over {
+    border-color: var(--drag-over-border);
+    background: var(--drag-over);
+  }
+  .room-card.occupied {
+    border-color: var(--occupied-border);
+    background: var(--occupied);
+  }
+
+  .room-card-header {
+    background: var(--surface2);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .room-number {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .room-type-badge {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--border);
+    border-radius: 8px;
+    padding: 1px 8px;
+  }
+  .room-capacity {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .room-card-body {
+    padding: 8px;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .room-card-body .empty-hint {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--border-dark);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    min-height: 50px;
+    border: 1.5px dashed var(--border);
+    border-radius: 6px;
+  }
+  .room-card-body.drag-over .empty-hint {
+    border-color: var(--drag-over-border);
+    color: var(--drag-over-border);
+    background: rgba(90,158,90,0.05);
+  }
+
+  /* 編集モーダル */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(44,35,24,0.55);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 16px 22px 14px;
+    max-width: 560px;
+    width: 100%;
+    box-shadow: 0 12px 40px rgba(44,35,24,0.25);
+    position: relative;
+  }
+  .modal h3 {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 10px;
+    letter-spacing: 0.06em;
+  }
+  .modal .close-modal {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: none; border: none;
+    font-size: 1.3rem; cursor: pointer;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+  .modal .close-modal:hover { color: var(--accent); }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px 12px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .form-group.full-width { grid-column: 1 / -1; }
+  .form-group label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 4px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--bg);
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .form-group textarea { resize: vertical; min-height: 42px; }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  /* 日別メニュータブ */
+  .daily-tab {
+    padding: 3px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    font-size: 0.78rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.12s;
+  }
+  .daily-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 700;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .btn-primary:hover { background: #5e4520; }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .btn-secondary:hover { background: var(--border); }
+
+  /* トースト */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    z-index: 999;
+    box-shadow: 0 4px 16px rgba(80,50,10,0.22);
+    animation: slideUp 0.25s ease;
+    max-width: 300px;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 部屋追加 */
+  .add-room-card {
+    background: var(--surface2);
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .add-room-card:hover {
+    border-color: var(--accent);
+    background: var(--accent-pale);
+    color: var(--accent);
+  }
+  .add-room-card .plus { font-size: 1.6rem; line-height: 1; }
+
+  /* スクロールバー */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-dark); }
+
+  .filter-bar {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .filter-bar input {
+    flex: 1;
+    padding: 5px 9px;
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.8rem;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .filter-bar input:focus { outline: none; border-color: var(--accent); }
+
+  .add-guest-btn {
+    padding: 6px 12px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .add-guest-btn:hover { background: #5e4520; }
+
+  .stats-bar {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.76rem;
+    color: var(--text-muted);
+  }
+  .stats-bar .stat { display: flex; gap: 4px; align-items: center; }
+  .stats-bar .stat strong { color: var(--accent); font-weight: 700; }
+
+  /* 日付前後ナビ */
+  .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .date-nav-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .date-nav-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* ===== 連泊リンク ===== */
+  .nights-badge-multi {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+  }
+  .nights-badge-multi .nights-total { opacity: 0.75; }
+  .stay-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+  .stay-link {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s;
+  }
+  .stay-link:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-pale); }
+  .stay-link-active {
+    background: var(--accent-pale);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ===== 印刷 ===== */
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 10mm 8mm;
+      /* Chrome/Edge: ヘッダー・フッター非表示 */
+      margin-header: 0mm;
+      margin-footer: 0mm;
+    }
+    /* Firefox向け */
+    body { margin: 0; }
+    body { background: #fff !important; color: #000 !important; font-size: 9pt; }
+    .guest-card.meal-dinner,
+    .guest-card.meal-breakfast,
+    .guest-card.meal-both,
+    .guest-card.meal-none { background: #fff !important; border-color: #999 !important; }
+    header, .stats-bar, .main-layout, .modal-overlay, .toast, #printBtn { display: none !important; }
+    #printArea { display: block !important; }
+  }
+  #printArea { display: none; }
+
+  /* 印刷エリア内スタイル */
+  .print-title { font-size: 14pt; font-weight: bold; font-family: serif; }
+  .print-date-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1.5mm;
+    font-size: 9pt;
+    font-weight: bold;
+    font-family: serif;
+  }
+  .print-date-line .print-date { font-size: 12pt; }
+  .print-updated { font-size: 7.5pt; color: #555; margin-bottom: 2mm; }
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 2mm;
+    border: 1px solid #333;
+    table-layout: fixed;
+  }
+  .print-table th, .print-table td {
+    border: 0.4px solid #999;
+    padding: 1.5px 2px;
+    vertical-align: middle;
+    line-height: 1.3;
+    overflow: hidden;
+  }
+  .print-table th:first-child, .print-table td:first-child { border-left: 1px solid #333; }
+  .print-table th:last-child,  .print-table td:last-child  { border-right: 1px solid #333; }
+  .print-table thead tr th { border-top: 1px solid #333; border-bottom: 1px solid #333; }
+  .print-table tbody tr:last-child td { border-bottom: 1px solid #333; }
+  .print-table th {
+    background: #e0e0e0;
+    font-weight: bold;
+    text-align: center;
+    font-size: 8pt;
+    white-space: nowrap;
+  }
+  /* 列幅定義（table-layout:fixed で確定） */
+  .print-table col.c-room    { width: 5.5%; }
+  .print-table col.c-tatami  { width: 3.5%; }
+  .print-table col.c-name    { width: 15%; }
+  .print-table col.c-nights  { width: 4%; }
+  .print-table col.c-adult   { width: 3%; }
+  .print-table col.c-chA     { width: 4.5%; }
+  .print-table col.c-chB     { width: 4.5%; }
+  .print-table col.c-agt     { width: 4.5%; }
+  .print-table col.c-dinner  { width: 8%; }
+  .print-table col.c-bfast   { width: 8%; }
+  .print-table col.c-charge  { width: 5%; }  /* 宿泊税と同幅 */
+  .print-table col.c-tax     { width: 5%; }
+  .print-table col.c-dtime   { width: 7%; }
+  .print-table col.c-btime   { width: 7%; }
+  .print-table col.c-notes   { width: auto; }  /* 残り全部 */
+
+  .print-table td.room-name { font-weight: bold; white-space: nowrap; text-align: center; font-size: 8.5pt; }
+  .print-table td.tatami    { text-align: center; font-size: 7pt; }
+  .print-table td.guest-name { text-align: center; font-size: 8.5pt; }
+  .print-table td.center    { text-align: center; font-size: 8.5pt; }
+  /* 行の高さは常に固定 */
+  .print-table tbody tr { height: 8mm; }
+  .print-table td.notes-cell { font-size: 6.5pt; line-height: 1.2; overflow: hidden; }
+  .print-table tr.floor-break td { border-bottom: 1px solid #333; }
+  /* 泊料金・宿泊税：二重線 */
+  .print-table td.charge-cell,
+  .print-table td.tax-cell {
+    border: 1px solid #333 !important;
+    outline: 0.5px solid #666;
+    outline-offset: -3px;
+    text-align: center;
+  }
+  /* 請求済み */
+  .print-table td.charge-cell.billing-done { background: #e8e8e8; text-align: center; font-size: 7.5pt; }
+
+  .print-sumtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    border: 1px solid #333;
+  }
+  .print-sumtable th, .print-sumtable td {
+    border: 0.4px solid #999;
+    padding: 2px 5px;
+    text-align: center;
+    font-size: 8.5pt;
+  }
+  .print-sumtable th:first-child, .print-sumtable td:first-child { border-left: 1px solid #333; }
+  .print-sumtable th:last-child,  .print-sumtable td:last-child  { border-right: 1px solid #333; }
+  .print-sumtable thead tr th { border-top: 1px solid #333; border-bottom: 1px solid #333; }
+  .print-sumtable tbody tr:last-child td { border-bottom: 1px solid #333; }
+  .print-sumtable th { background: #e0e0e0; font-weight: bold; font-size: 8pt; }
+  .print-sumtable td.total-cell { font-weight: bold; }
+  /* A・B列を1.5倍幅 */
+  .print-sumtable th.cat-A, .print-sumtable td.cat-A,
+  .print-sumtable th.cat-B, .print-sumtable td.cat-B { width: 1.5em; }
+  .print-sum-row {
+    display: flex;
+    gap: 0;
+    margin-bottom: 3mm;
+    width: 91%;   /* 室名〜朝食時間列まで */
+  }
+  .print-sum-dinner-wrap  { width: 64%; padding-right: 2.5%; }
+  .print-sum-bfast-wrap   { width: 36%; }
+  .print-sum-section { font-size: 8.5pt; font-weight: bold; margin-bottom: 1mm; }
+
+  /* 集計テーブル：全メニュー列を等幅・改行なし */
+  .print-sumtable { table-layout: fixed; }
+  .print-sumtable th.sc-label, .print-sumtable td.sc-label { width: 1.8em; }
+  .print-sumtable th.sc-total, .print-sumtable td.sc-total { width: 2em; font-weight: bold; }
+  .print-sumtable th.sc-menu {
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 7.5pt;
+  }
+  .print-sumtable th.sc-menu.small-menu { font-size: 6.5pt; }
+
+  /* ===== コンパクトテーブルモード ===== */
+  #compactTable {
+    width: 100%;
+    overflow: hidden;
+  }
+  #compactTable table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    table-layout: fixed;
+  }
+  #compactTable th {
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 3px 6px;
+    border-bottom: 1.5px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  #compactTable td {
+    padding: 2px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.5;
+  }
+  #compactTable tr:hover td { background: var(--accent-pale); }
+  #compactTable td.ct-room {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--accent);
+  }
+  #compactTable td.ct-name   { }
+  #compactTable td.ct-nights { text-align: center; color: var(--text-muted); font-size: 0.75rem; }
+  #compactTable td.ct-pax    { text-align: center; color: var(--text-muted); font-size: 0.78rem; }
+  #compactTable td.ct-meal   { font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #compactTable td.ct-notes  { color: var(--text-muted); font-size: 0.72rem; }
+  #compactTable tr.ct-empty td.ct-name { color: var(--text-muted); font-style: italic; }
+  #compactTable tr.ct-multi td { border-bottom: none; }
+  #compactTable tr.ct-multi-last td { border-bottom: 1px solid var(--border); }
+  #compactTable tr.ct-drag-over td { background: var(--accent-pale) !important; outline: 2px dashed var(--accent); }
+
+  /* 列リサイズ */
+  #compactTable table { table-layout: fixed; width: 100%; }
+  #compactTable th { position: relative; }
+  .ct-resize-handle {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 1;
+  }
+  .ct-resize-handle:hover,
+  .ct-resize-handle.resizing { background: var(--accent); opacity: 0.5; }
+
+  /* 食事色分けチップ */
+  .ct-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    border: 1.5px solid transparent;
+    cursor: grab;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    user-select: none;
+    transition: opacity 0.15s;
+  }
+  .ct-chip:active { cursor: grabbing; }
+  .ct-chip.dragging { opacity: 0.4; }
+  .ct-chip.meal-both      { background: #fff0f0; border-color: #f5b8b8; }
+  .ct-chip.meal-dinner    { background: #f0faf2; border-color: #a8d8b0; }
+  .ct-chip.meal-breakfast { background: #f0f4ff; border-color: #b8c8f0; }
+  .ct-chip.meal-none      { background: #f5f5f5; border-color: #d8d8d8; }
+
+  /* ===== コンパクトモード ===== */
+  .compact-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    transition: all 0.15s;
+    margin-left: auto;
+  }
+  .compact-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .compact-toggle input { cursor: pointer; accent-color: var(--accent); }
+
+  /* コンパクト時：6列固定グリッド */
+  .room-grid.compact {
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 5px !important;
+  }
+
+  /* コンパクト時の部屋カード */
+  .room-grid.compact .room-card { min-height: unset; border-radius: 6px; }
+  .room-grid.compact .room-card-header { padding: 3px 7px; gap: 4px; }
+  .room-grid.compact .room-number { font-size: 0.8rem; }
+  .room-grid.compact .room-type-badge { font-size: 0.58rem; padding: 0px 5px; }
+  .room-grid.compact .room-capacity { font-size: 0.58rem; }
+  .room-grid.compact .room-card-body {
+    padding: 4px 5px;
+    gap: 3px;
+    min-height: 32px;
+  }
+  .room-grid.compact .room-card-body .empty-hint {
+    font-size: 0.6rem;
+    min-height: 24px;
+    border-radius: 4px;
+  }
+
+  /* コンパクト時のゲストカード */
+  .room-grid.compact .guest-card { padding: 3px 6px; border-radius: 5px; }
+  .room-grid.compact .guest-card .card-top { gap: 3px; }
+  .room-grid.compact .guest-card .name {
+    font-size: 0.74rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+  .room-grid.compact .guest-card .nights-badge {
+    font-size: 0.56rem;
+    padding: 1px 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .room-grid.compact .guest-card .card-meta { display: none; }
+  .room-grid.compact .guest-card .card-tags { margin-top: 2px; gap: 2px; }
+  .room-grid.compact .guest-card .tag { font-size: 0.56rem; padding: 0px 4px; }
+  .room-grid.compact .guest-card .stay-links { display: none; }
+  .room-grid.compact .guest-card div[style*="0.68rem"] { display: none; }
+  .room-grid.compact .guest-card div[style*="0.72rem"] { display: none; }
+  .room-grid.compact .guest-card .remove-btn { top: 2px; right: 2px; font-size: 0.7rem; }
+  .room-grid.compact .guest-card .delete-guest-btn { top: 2px; right: 2px; font-size: 0.7rem; }
+
+  /* コンパクト時のフロア区切り */
+  .room-grid.compact .floor-divider { margin: 3px 0 1px; }
+  .room-grid.compact .floor-label { font-size: 0.62rem; padding: 1px 6px; }
+
+  /* フロア区切り */
+  .floor-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+    background: var(--surface);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1.5px solid var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .floor-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* 部屋設定リスト */
+  .rs-room-row { display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface);font-size:0.83rem; }
+  .rs-room-row:hover { background:var(--accent-pale); }
+  .rs-room-num  { font-weight:700;min-width:44px;color:var(--accent); }
+  .rs-room-type { flex:1;color:var(--text-muted); }
+  .rs-room-cap  { min-width:44px;text-align:right;color:var(--text-muted);font-size:0.78rem; }
+  .rs-edit-btn  { padding:2px 10px;font-size:0.75rem;border-radius:4px;border:1px solid var(--border);background:var(--surface2);cursor:pointer; }
+  .rs-edit-btn:hover { background:var(--accent);color:#fff;border-color:var(--accent); }
+  .rs-del-btn   { padding:2px 10px;font-size:0.75rem;border-radius:4px;border:1px solid #e0b0b0;background:#fff5f5;color:#c0392b;cursor:pointer; }
+  .rs-del-btn:hover { background:#c0392b;color:#fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    🏨 部屋割りシステム
+    <span class="sub">Hotel Room Assignment</span>
+  </h1>
+  <div class="header-actions">
+    <div class="date-nav">
+      <button class="date-nav-btn" onclick="shiftDate(-1)" title="前日">‹</button>
+      <input type="date" class="date-picker" id="targetDate">
+      <button class="date-nav-btn" onclick="shiftDate(1)" title="翌日">›</button>
+    </div>
+
+    <button class="btn btn-white" onclick="openAddRoomModal()">＋ 部屋追加</button>
+    <button class="btn btn-outline" onclick="clearState()" title="データをリセット" style="opacity:0.7">🗑 リセット</button>
+    <button class="btn btn-outline" onclick="openMenuSettingsModal()">🍽 メニュー設定</button>
+    <button class="btn btn-outline" onclick="openRoomSettingsModal()">🚪 部屋設定</button>
+    <button class="btn btn-white" id="printBtn" onclick="printRoomList()">🖨 印刷</button>
+  </div>
+</header>
+
+<div id="statsBar" class="stats-bar">
+  <div class="stat">部屋数: <strong id="statRooms">0</strong></div>
+  <div class="stat">割当済: <strong id="statAssigned">0</strong></div>
+  <div class="stat">未割当: <strong id="statUnassigned">0</strong></div>
+  <div class="stat">空室: <strong id="statEmpty">0</strong></div>
+  <div class="stat" id="statSaved" style="margin-left:auto;font-size:0.72rem;color:var(--text-muted)">☁️ Firebase接続中…</div>
+</div>
+
+<div class="main-layout">
+  <!-- 未割当パネル -->
+  <div class="unassigned-panel">
+    <div class="panel-header">
+      <h2>未割当ゲスト <span class="count-badge" id="unassignedCount">0</span></h2>
+    </div>
+    <div class="csv-import">
+      <label>手間いらずCSV取込</label>
+      <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)">
+      <div class="csv-note">
+        手間いらずCSV（Shift-JIS）に対応<br>
+        列: チェックイン日,予約日時,チェックアウト日,宿泊者氏名,予約サイト名,予約番号,部屋数,大人人数,子供人数,…,泊数
+      </div>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="searchGuest" placeholder="ゲスト検索..." oninput="renderUnassigned()">
+      <button class="add-guest-btn" onclick="openAddGuestModal()">＋ 追加</button>
+    </div>
+    <div class="unassigned-list" id="unassignedList"
+      ondragover="onDragOver(event, 'unassigned')"
+      ondragleave="onDragLeave(event, 'unassigned')"
+      ondrop="onDrop(event, 'unassigned')">
+    </div>
+  </div>
+
+  <!-- 部屋エリア -->
+  <div class="rooms-area">
+    <div class="rooms-toolbar">
+      <h2>客室</h2>
+      <input type="text" class="date-picker" id="searchRoom" placeholder="部屋番号・タイプ検索" style="min-width:160px" oninput="renderRooms()">
+      <label class="compact-toggle" title="スクロールなしで全部屋を表示">
+        <input type="checkbox" id="compactMode" onchange="toggleCompact(this.checked)">
+        コンパクト表示
+      </label>
+    </div>
+    <div id="compactTable" style="display:none;"></div>
+    <div class="room-grid" id="roomGrid"></div>
+  </div>
+</div>
+
+<!-- ゲスト編集/追加モーダル -->
+<div class="modal-overlay hidden" id="guestModal">
+  <div class="modal">
+    <button class="close-modal" onclick="closeModal('guestModal')">×</button>
+    <h3 id="guestModalTitle">ゲスト情報</h3>
+    <div class="form-grid">
+      <div class="form-group full-width">
+        <label>氏名 *</label>
+        <input type="text" id="f_name" placeholder="例: 山田 太郎">
+      </div>
+      <div class="form-group">
+        <label>泊数</label>
+        <input type="number" id="f_nights" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>大人数（大）</label>
+        <input type="number" id="f_adults" min="0" value="1">
+      </div>
+      <div class="form-group">
+        <label>小人A（A）</label>
+        <input type="number" id="f_childA" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>小人B（B）</label>
+        <input type="number" id="f_childB" min="0" value="0" oninput="syncChildB(this)">
+      </div>
+      <div class="form-group">
+        <label>予約先</label>
+        <select id="f_source">
+          <option value="">選択</option>
+          <option>直接予約</option>
+          <option>手間いらず</option>
+          <option>JTB</option>
+          <option>るるぶトラベル</option>
+          <option>じゃらん</option>
+          <option>楽天トラベル</option>
+          <option>一休.com</option>
+          <option>Booking.com</option>
+          <option>Expedia</option>
+          <option>その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>請求先</label>
+        <select id="f_billing">
+          <option value="">―</option>
+          <option value="済">済</option>
+        </select>
+      </div>
+      <div class="form-group full-width">
+        <label>プラン名</label>
+        <input type="text" id="f_plan" placeholder="（CSVから自動入力）" readonly style="background:var(--surface2);color:var(--text-muted);font-size:0.82rem">
+      </div>
+      <!-- 日別メニュータブ -->
+      <div class="form-group full-width" id="dailyMenuSection">
+        <label>食事内容（日別）</label>
+        <div id="dailyMenuTabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px"></div>
+        <div id="dailyMenuPane" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--surface2)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px">
+            <div class="form-group"><label>夕食メニュー</label><select id="f_dinner"></select></div>
+            <div class="form-group"><label>夕食時間</label><select id="f_dinnerTime"></select></div>
+            <div class="form-group"><label>朝食メニュー</label><select id="f_breakfast"></select></div>
+            <div class="form-group"><label>朝食時間</label><select id="f_breakfastTime"></select></div>
+          </div>
+          <!-- 日別人数フィールド（連泊時のみ表示） -->
+          <div id="dailyGuestsRow" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+            <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:5px;letter-spacing:0.03em">人数（この日）</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 10px">
+              <div class="form-group"><label>大</label><input type="number" id="f_daily_adults" min="0" value="0" style="font-size:0.85rem"></div>
+              <div class="form-group"><label>A（小人）</label><input type="number" id="f_daily_childA" min="0" value="0" style="font-size:0.85rem"></div>
+              <div class="form-group"><label>B（小人）</label><input type="number" id="f_daily_childB" min="0" value="0" style="font-size:0.85rem"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group full-width">
+        <label>備考</label>
+        <textarea id="f_notes" placeholder="アレルギー、記念日、特別対応など..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('guestModal')">キャンセル</button>
+      <button class="btn-primary" onclick="saveGuest()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 統合解除モーダル -->
+<div class="modal-overlay hidden" id="splitModal">
+  <div class="modal" style="max-width:440px">
+    <button class="close-modal" onclick="closeModal('splitModal')">×</button>
+    <h3>統合を解除</h3>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px">連泊を1泊ずつの予約に分割します。各日の部屋割当はそのまま引き継がれます。</p>
+    <div id="splitPreview" style="background:var(--surface2);border-radius:6px;padding:8px 12px;font-size:0.84rem;line-height:1.8"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('splitModal')">キャンセル</button>
+      <button class="btn-primary" onclick="executeSplit()">分割する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 予約統合モーダル -->
+<div class="modal-overlay hidden" id="mergeModal">
+  <div class="modal" style="max-width:480px">
+    <button class="close-modal" onclick="closeModal('mergeModal')">×</button>
+    <h3>予約を統合</h3>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px">統合元の予約に別の予約を連結し、チェックイン日と泊数を自動計算します。統合先の予約は削除されます。</p>
+    <div id="mergeSourceInfo" style="background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem;"></div>
+    <div class="form-group">
+      <label>統合する予約を選択</label>
+      <select id="mergeTargetSelect" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:inherit;font-size:0.85rem;background:var(--bg)"></select>
+    </div>
+    <div id="mergePreview" style="margin-top:10px;background:var(--accent-pale);border-radius:6px;padding:8px 12px;font-size:0.83rem;display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('mergeModal')">キャンセル</button>
+      <button class="btn-primary" onclick="executeMerge()">統合する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 部屋追加モーダル -->
+<div class="modal-overlay hidden" id="roomModal">
+  <div class="modal" style="max-width:380px">
+    <button class="close-modal" onclick="closeModal('roomModal')">×</button>
+    <h3 id="roomModalTitle">客室を追加</h3>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label>部屋番号 *</label>
+        <input type="text" id="r_number" placeholder="例: 101, 201A">
+      </div>
+      <div class="form-group">
+        <label>部屋タイプ</label>
+        <select id="r_type">
+          <option>イス席</option>
+          <option>51畳</option>
+          <option>10+2畳</option>
+          <option>10+5畳</option>
+          <option>10畳</option>
+          <option>12+5畳</option>
+          <option>12+5.5畳</option>
+          <option>12.5畳</option>
+          <option>10+6畳</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>定員</label>
+        <input type="number" id="r_capacity" min="1" value="2">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('roomModal')">キャンセル</button>
+      <button class="btn-primary" onclick="saveRoom()">追加</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+let guests = []; // 全ゲスト
+let rooms = []; // 全部屋
+// dateAssignments: { "2025-05-01": { roomNumber: [guestId,...] } }
+let dateAssignments = {};
+let dragGuestId = null;
+
+// ===== MENU SETTINGS =====
+let menuSettings = {
+  dinnerMenus:    ['✖', '夕あり', '会A', '会C', 'ナベA', 'ナベC', 'すき', 'しゃぶ', 'おまかせ'],
+  dinnerTimes:    ['✖', '―（未定）', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'],
+  breakfastMenus: ['✖', '和食', 'パン', 'おまかせ'],
+  breakfastTimes: ['✖', '―（未定）', '07:00', '07:30', '08:00', '08:30', '09:00'],
+};
+let dragSourceRoom = null;
+let editingGuestId = null;
+let editingRoomIdx = null;
+
+// 現在の日付のroomAssignmentsを返すヘルパー
+function getCurrentDate() {
+  return document.getElementById('targetDate')?.value || new Date().toISOString().slice(0,10);
+}
+function getAssignments(date) {
+  date = date || getCurrentDate();
+  if (!dateAssignments[date]) {
+    dateAssignments[date] = {};
+    rooms.forEach(r => { dateAssignments[date][r.number] = []; });
+  }
+  return dateAssignments[date];
+}
+// ゲストの指定日の割当部屋を返す
+function getGuestRoomOnDate(guestId, date) {
+  date = date || getCurrentDate();
+  const asn = dateAssignments[date] || {};
+  for (const [room, ids] of Object.entries(asn)) {
+    if (ids.includes(guestId)) return room;
+  }
+  return null;
+}
+// ゲストが現在日付で何泊目か計算（checkIn から）
+function getNightIndex(guest) {
+  const checkIn = guest.checkIn;
+  if (!checkIn) return 1;
+  const cur = getCurrentDate();
+  const d0 = new Date(checkIn);
+  const d1 = new Date(cur);
+  const diff = Math.round((d1 - d0) / 86400000) + 1;
+  return Math.max(1, Math.min(diff, guest.nights || 1));
+}
+
+// ===== DATE NAVIGATION =====
+function shiftDate(delta) {
+  const el = document.getElementById('targetDate');
+  const cur = el.value ? new Date(el.value) : new Date();
+  cur.setDate(cur.getDate() + delta);
+  el.value = cur.toISOString().slice(0, 10);
+  saveState();
+  render();
+}
+
+function updateDateBtns() { /* no-op: ショートカット廃止 */ }
+
+// セレクトボックスをmenuSettingsで動的生成
+function populateMealSelects(curDinner, curDinnerTime, curBreakfast, curBreakfastTime) {
+  const fill = (id, items, cur) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = cur !== undefined ? cur : sel.value;
+    sel.innerHTML = '';
+    items.forEach(v => {
+      const opt = document.createElement('option');
+      // ✖ = 食事なし（value='✖'）、―（未定） = 時間未定（value=''）、その他 = そのまま
+      if (v === '✖') opt.value = '✖';
+      else if (v === '―（未定）') opt.value = '';
+      else opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    });
+    // 現在値が選択肢にあればそれを選択（value完全一致 → text完全一致 の順）
+    if (prev !== undefined && prev !== null) {
+      const match = [...sel.options].find(o => o.value === prev)
+                 || [...sel.options].find(o => o.textContent === prev);
+      if (match) sel.value = match.value;
+      else sel.value = ''; // 見つからない場合は先頭（✖）
+    }
+  };
+  fill('f_dinner',        menuSettings.dinnerMenus,    curDinner);
+  fill('f_dinnerTime',    menuSettings.dinnerTimes,    curDinnerTime);
+  fill('f_breakfast',     menuSettings.breakfastMenus, curBreakfast);
+  fill('f_breakfastTime', menuSettings.breakfastTimes, curBreakfastTime);
+}
+
+// ===== SAVE / LOAD (Firebase Realtime Database) =====
+// localStorageは使わず、すべてFirebaseに保存・同期します
+
+let _saveTimer = null;        // debounce用タイマー
+let _isRemoteUpdate = false;  // リモート更新中フラグ（無限ループ防止）
+
+function saveState() {
+  // Firebase未初期化の場合はスキップ
+  if (!window.__firebase) { console.warn('Firebase未設定'); return; }
+
+  // 保存表示を「保存中…」にする
+  const el = document.getElementById('statSaved');
+  if (el) el.textContent = '💾 保存中…';
+
+  // 連続変更時のdebounce（500ms待ってから1回だけ書き込む）
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    try {
+      const { set, DATA_REF } = window.__firebase;
+      const date = document.getElementById('targetDate')?.value || '';
+      const now  = new Date();
+      const data = {
+        guests, rooms, dateAssignments, menuSettings,
+        targetDate: date, savedAt: now.toISOString()
+      };
+      await set(DATA_REF, data);
+
+      if (el) {
+        const mm  = (now.getMonth()+1).toString().padStart(2,'0');
+        const dd  = now.getDate().toString().padStart(2,'0');
+        const hh  = now.getHours().toString().padStart(2,'0');
+        const min = now.getMinutes().toString().padStart(2,'0');
+        el.textContent = `☁️ ${now.getFullYear()}/${mm}/${dd} ${hh}:${min} 同期済`;
+      }
+    } catch(e) {
+      console.warn('Firebase保存失敗:', e);
+      const el2 = document.getElementById('statSaved');
+      if (el2) el2.textContent = '⚠️ 保存失敗（オフライン？）';
+    }
+  }, 500);
+}
+
+function applyRemoteData(data) {
+  // メニュー設定の互換チェック
+  if (data.menuSettings) {
+    const dm = data.menuSettings.dinnerMenus || [];
+    const isNewFormat = dm.includes('会A') || dm.includes('✖') || dm.includes('すき') || dm.includes('しゃぶ');
+    if (isNewFormat) menuSettings = Object.assign({}, menuSettings, data.menuSettings);
+  }
+  if (data.guests)          guests          = data.guests;
+  if (data.rooms)           rooms           = data.rooms;
+  if (data.dateAssignments) dateAssignments = data.dateAssignments;
+  // 旧データ互換
+  else if (data.roomAssignments) {
+    const d = data.targetDate || getCurrentDate();
+    dateAssignments[d] = data.roomAssignments;
+  }
+  if (data.targetDate) document.getElementById('targetDate').value = data.targetDate;
+}
+
+function loadState() {
+  // Firebase未初期化はスキップ（オフラインでも動くようにinitDefaultRoomsへ）
+  return false;
+}
+
+function startFirebaseSync() {
+  if (!window.__firebase) {
+    console.warn('Firebase設定が未完了です。firebaseConfigを書き換えてください。');
+    const el = document.getElementById('statSaved');
+    if (el) el.textContent = '⚠️ Firebase未設定（ローカルモード）';
+    return;
+  }
+  const { onValue, get, DATA_REF } = window.__firebase;
+
+  // 初回読み込み（get）してからリアルタイム監視（onValue）を開始
+  get(DATA_REF).then(snapshot => {
+    if (snapshot.exists()) {
+      _isRemoteUpdate = true;
+      applyRemoteData(snapshot.val());
+      ensureDefaultRooms();
+      const el = document.getElementById('statSaved');
+      if (el) el.textContent = '☁️ クラウドから復元しました';
+      render();
+      _isRemoteUpdate = false;
+    } else {
+      // Firebaseに初期データなし → デフォルト部屋を初期化して即保存
+      initDefaultRooms();
+      render();
+      saveState();
+    }
+
+    // ✅ リアルタイム監視を開始（他の端末の変更を自動反映）
+    onValue(DATA_REF, (snap) => {
+      if (!snap.exists()) return;
+      // 自分の書き込みによる通知は無視（debounce中は二重更新しない）
+      if (_saveTimer) return;
+      _isRemoteUpdate = true;
+      const prev = document.getElementById('targetDate').value;
+      applyRemoteData(snap.val());
+      ensureDefaultRooms();
+      const el = document.getElementById('statSaved');
+      if (el) {
+        const now = new Date();
+        const mm  = (now.getMonth()+1).toString().padStart(2,'0');
+        const dd  = now.getDate().toString().padStart(2,'0');
+        const hh  = now.getHours().toString().padStart(2,'0');
+        const min = now.getMinutes().toString().padStart(2,'0');
+        el.textContent = `🔄 ${now.getFullYear()}/${mm}/${dd} ${hh}:${min} 他端末から同期`;
+      }
+      render();
+      _isRemoteUpdate = false;
+    });
+  }).catch(e => {
+    console.warn('Firebase読み込み失敗:', e);
+    initDefaultRooms();
+    render();
+    const el = document.getElementById('statSaved');
+    if (el) el.textContent = '⚠️ Firebase接続失敗（オフラインモード）';
+  });
+}
+
+function clearState() {
+  if (!confirm('CSVで取込んだ予約データをリセットします。\n手入力した予約と客室設定は保持されます。\nよろしいですか？')) return;
+  // CSVで取込んだゲスト（resNoあり）のみ削除、手入力は残す
+  const csvGuestIds = new Set(guests.filter(g => g.resNo).map(g => g.id));
+  guests = guests.filter(g => !g.resNo);
+  // dateAssignmentsからも削除したゲストを除去
+  Object.keys(dateAssignments).forEach(d => {
+    Object.keys(dateAssignments[d]).forEach(room => {
+      dateAssignments[d][room] = (dateAssignments[d][room]||[]).filter(id => !csvGuestIds.has(id));
+    });
+  });
+  // roomsは一切触らない
+  ensureDefaultRooms();
+  saveState(); // Firebaseに保存（全端末に同期）
+  showToast('CSV取込データをリセットしました');
+  render();
+}
+
+// ===== INIT =====
+// 固定客室（絶対削除不可・リセット不可）
+const DEFAULT_ROOMS = [
+  // 3F
+  { number:'301', type:'10+2畳',   capacity:3,  floor:'3F' },
+  { number:'302', type:'10+5畳',   capacity:4,  floor:'3F' },
+  { number:'303', type:'10+2畳',   capacity:3,  floor:'3F' },
+  { number:'304', type:'10畳',     capacity:2,  floor:'3F' },
+  { number:'305', type:'12+5畳',   capacity:4,  floor:'3F' },
+  { number:'306', type:'12+5.5畳', capacity:4,  floor:'3F' },
+  // 4F
+  { number:'401', type:'10+2畳',   capacity:3,  floor:'4F' },
+  { number:'402', type:'10+5畳',   capacity:4,  floor:'4F' },
+  { number:'403', type:'10+2畳',   capacity:3,  floor:'4F' },
+  { number:'404', type:'10畳',     capacity:2,  floor:'4F' },
+  { number:'405', type:'12+5畳',   capacity:4,  floor:'4F' },
+  { number:'406', type:'12+5.5畳', capacity:4,  floor:'4F' },
+  // 5F
+  { number:'501', type:'10+2畳',   capacity:3,  floor:'5F' },
+  { number:'502', type:'10+5畳',   capacity:4,  floor:'5F' },
+  { number:'503', type:'10+2畳',   capacity:3,  floor:'5F' },
+  { number:'504', type:'10畳',     capacity:2,  floor:'5F' },
+  { number:'505', type:'12.5畳',   capacity:3,  floor:'5F' },
+  { number:'506', type:'10+6畳',   capacity:4,  floor:'5F' },
+  // 6F
+  { number:'601', type:'10+2畳',   capacity:3,  floor:'6F' },
+  { number:'602', type:'10+5畳',   capacity:4,  floor:'6F' },
+  { number:'603', type:'10+2畳',   capacity:3,  floor:'6F' },
+  { number:'604', type:'10畳',     capacity:2,  floor:'6F' },
+  { number:'605', type:'12.5畳',   capacity:3,  floor:'6F' },
+  { number:'606', type:'10+6畳',   capacity:4,  floor:'6F' },
+  // 特別室（千鳥・広間は同フロア）
+  { number:'千鳥', type:'特別室',   capacity:4,  floor:'特別' },
+  { number:'広間', type:'51畳',     capacity:10, floor:'特別' },
+];
+
+function initDefaultRooms() {
+  rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
+}
+
+// rooms配列にDEFAULT_ROOMSが全て含まれることを保証（追加された部屋は残す）
+function ensureDefaultRooms() {
+  DEFAULT_ROOMS.forEach(r => {
+    if (!rooms.find(x => x.number === r.number)) rooms.push({ ...r });
+  });
+}
+
+function init() {
+  const today = new Date();
+  document.getElementById('targetDate').value = today.toISOString().slice(0,10);
+
+  // 変更のたびに自動保存
+  document.getElementById('targetDate').addEventListener('change', () => { saveState(); render(); });
+
+  // コンパクトモード復元（localStorageを引き続き使用：UIの好みは端末ローカルで良い）
+  if (localStorage.getItem('compactMode') === '1') {
+    document.getElementById('compactMode').checked = true;
+    toggleCompact(true);
+  }
+
+  // Firebase同期開始（データ読込＋リアルタイム監視）
+  // Firebaseが未設定の場合はデフォルト部屋でローカル動作
+  startFirebaseSync();
+}
+
+// ===== RENDER =====
+function render() {
+  renderUnassigned();
+  renderRooms();
+  renderStats();
+  saveState();
+  if (document.getElementById('compactMode').checked) { try { renderCompactTable(); } catch(e) { console.error('renderCompactTable error:', e); } }
+}
+
+// その日に宿泊しているかチェック（checkIn <= date < checkOut、またはcheckInのみの場合はcheckIn === date）
+function isStayingOnDate(guest, date) {
+  if (!guest.checkIn) return true; // checkIn未設定は全日表示（手入力など）
+  const ci = guest.checkIn;
+  // checkOutがある場合：チェックアウト日は宿泊しない
+  if (guest.checkOut && guest.checkOut > ci) {
+    return date >= ci && date < guest.checkOut;
+  }
+  // checkOutなし：checkIn から nights 日分
+  const nights = guest.nights || 1;
+  const ciDate = new Date(ci);
+  const endDate = new Date(ci);
+  endDate.setDate(endDate.getDate() + nights);
+  const endStr = endDate.toISOString().slice(0, 10);
+  return date >= ci && date < endStr;
+}
+
+function renderUnassigned() {
+  const q = document.getElementById('searchGuest').value.toLowerCase();
+  const date = getCurrentDate();
+  // その日に宿泊しているゲストのみ対象
+  const stayingGuests = guests.filter(g => isStayingOnDate(g, date));
+  const unassigned = stayingGuests
+    .filter(g => !getGuestRoomOnDate(g.id, date) && (!q || g.name.toLowerCase().includes(q)))
+    .sort((a, b) => {
+      const totalA = (a.adults||0) + (a.childA||0) + (a.childB||0) || a.guests || 1;
+      const totalB = (b.adults||0) + (b.childA||0) + (b.childB||0) || b.guests || 1;
+      return totalB - totalA;
+    });
+  const totalUnassigned = stayingGuests.filter(g => !getGuestRoomOnDate(g.id, date)).length;
+  document.getElementById('unassignedCount').textContent = totalUnassigned;
+  const el = document.getElementById('unassignedList');
+  el.innerHTML = '';
+  if (unassigned.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.8rem;">ゲストがいません</div>';
+    return;
+  }
+  unassigned.forEach(g => {
+    el.appendChild(createGuestCard(g, null));
+  });
+}
+
+function getFloor(room) {
+  return room.floor || (room.number.match(/^(\d)/) ? room.number[0] + 'F' : '特別');
+}
+
+function renderRooms() {
+  const q = document.getElementById('searchRoom').value.toLowerCase();
+  const grid = document.getElementById('roomGrid');
+  grid.innerHTML = '';
+  const filtered = rooms.filter(r => !q || r.number.toLowerCase().includes(q) || r.type.toLowerCase().includes(q));
+
+  // フロアごとにグループ化
+  const floorOrder = ['3F','4F','5F','6F','特別'];
+  const groups = {};
+  filtered.forEach(r => {
+    const f = r.floor || getFloor(r);
+    if (!groups[f]) groups[f] = [];
+    groups[f].push(r);
+  });
+
+  let isFirst = true;
+  floorOrder.forEach(floor => {
+    if (!groups[floor] || groups[floor].length === 0) return;
+    // フロア区切り
+    const divider = document.createElement('div');
+    divider.className = 'floor-divider';
+    divider.style.cssText = `grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:${isFirst?'0':'10px'} 0 4px;`;
+    const label = floor === '特別' ? '千鳥・広間' : floor;
+    divider.innerHTML = `<span class="floor-label">${label}</span><span class="floor-line"></span>`;
+    grid.appendChild(divider);
+    isFirst = false;
+    groups[floor].forEach(r => grid.appendChild(createRoomCard(r)));
+  });
+  // 上記グループにないもの（手動追加など）
+  const knownFloors = new Set(floorOrder);
+  filtered.forEach(r => {
+    const f = r.floor || getFloor(r);
+    if (!knownFloors.has(f)) grid.appendChild(createRoomCard(r));
+  });
+}
+
+function renderStats() {
+  const date = getCurrentDate();
+  const asn = getAssignments(date);
+  const totalRooms = rooms.length;
+  const stayingGuests = guests.filter(g => isStayingOnDate(g, date));
+  const assigned = stayingGuests.filter(g=>getGuestRoomOnDate(g.id, date)).length;
+  const unassigned = stayingGuests.filter(g=>!getGuestRoomOnDate(g.id, date)).length;
+  const emptyRooms = rooms.filter(r=>(asn[r.number]||[]).length===0).length;
+  document.getElementById('statRooms').textContent = totalRooms;
+  document.getElementById('statAssigned').textContent = assigned;
+  document.getElementById('statUnassigned').textContent = unassigned;
+  document.getElementById('statEmpty').textContent = emptyRooms;
+}
+
+function createGuestCard(guest, roomNumber) {
+  // 食事条件クラスを判定
+  const hasDinnerVal     = guest.dinner    && guest.dinner    !== '✖' && guest.dinner    !== '';
+  const hasBreakfastVal  = guest.breakfast && guest.breakfast !== '✖' && guest.breakfast !== '';
+  const dinnerBlank      = guest.dinner    === '';   // 食事あり・メニュー未定
+  const breakfastBlank   = guest.breakfast === '';
+  const dinnerExists     = hasDinnerVal || dinnerBlank;
+  const breakfastExists  = hasBreakfastVal || breakfastBlank;
+  let mealClass = '';
+  if      (dinnerExists && breakfastExists) mealClass = 'meal-both';
+  else if (dinnerExists)                    mealClass = 'meal-dinner';
+  else if (breakfastExists)                 mealClass = 'meal-breakfast';
+  else                                      mealClass = 'meal-none';
+
+  const card = document.createElement('div');
+  card.className = `guest-card ${mealClass}`;
+  card.draggable = true;
+  card.dataset.guestId = guest.id;
+
+  card.addEventListener('dragstart', e => onDragStart(e, guest.id, roomNumber));
+  card.addEventListener('dragend', e => onDragEnd(e));
+  card.addEventListener('dblclick', () => openEditGuestModal(guest.id));
+
+  const tags = [];
+  if (guest.dinner && guest.dinner !== '✖') tags.push(`<span class="tag tag-dinner">🌙 ${guest.dinner}</span>`);
+  if (guest.breakfast && guest.breakfast !== '✖') tags.push(`<span class="tag tag-breakfast">☀️ ${guest.breakfast}</span>`);
+  if (guest.source) tags.push(`<span class="tag tag-source">${guest.source}</span>`);
+
+  // 大/A/B 人数表示
+  const adultsCount = guest.adults != null ? guest.adults : guest.guests || 1;
+  const childACount = guest.childA || 0;
+  const childBCount = guest.childB || 0;
+  const countParts = [];
+  if (adultsCount > 0) countParts.push(`大${adultsCount}`);
+  if (childACount > 0) countParts.push(`A${childACount}`);
+  if (childBCount > 0) countParts.push(`B${childBCount}`);
+  const countLabel = countParts.join('/') || `${guest.guests||1}名`;
+
+  const meta = [
+    `<div class="meta-item"><span class="meta-label">人数</span><span class="meta-value">${countLabel}</span></div>`,
+    guest.billing ? `<div class="meta-item"><span class="meta-label">請求</span><span class="meta-value">${guest.billing}</span></div>` : '',
+    guest.dinnerTime ? `<div class="meta-item"><span class="meta-label">夕食</span><span class="meta-value">${guest.dinnerTime}</span></div>` : '',
+    guest.breakfastTime ? `<div class="meta-item"><span class="meta-label">朝食</span><span class="meta-value">${guest.breakfastTime}</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  const nights = guest.nights || 1;
+  const nightIdx = getNightIndex(guest);
+  const nightsBadge = nights > 1
+    ? `<span class="nights-badge nights-badge-multi">${nightIdx}/<span class="nights-total">${nights}</span>泊</span>`
+    : `<span class="nights-badge">1/1泊</span>`;
+
+  // 連泊リンク（checkInが設定されている場合）
+  let stayLinks = '';
+  if (nights > 1 && guest.checkIn) {
+    const links = [];
+    for (let n = 0; n < nights; n++) {
+      const d = new Date(guest.checkIn);
+      d.setDate(d.getDate() + n);
+      const dateStr = d.toISOString().slice(0,10);
+      const roomOnDay = getGuestRoomOnDate(guest.id, dateStr);
+      const label = `${n+1}泊目`;
+      const isActive = dateStr === getCurrentDate();
+      const roomLabel = roomOnDay ? roomOnDay : '未割当';
+      links.push(`<span class="stay-link${isActive?' stay-link-active':''}" onclick="jumpToDate('${dateStr}', event)" title="${dateStr}">${label}:${roomLabel}</span>`);
+    }
+    stayLinks = `<div class="stay-links">${links.join('')}</div>`;
+  }
+
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="name">${escHtml(guest.name)}</div>
+      ${nightsBadge}
+    </div>
+    ${meta ? `<div class="card-meta">${meta}</div>` : ''}
+    ${tags.length ? `<div class="card-tags">${tags.join('')}</div>` : ''}
+    ${stayLinks}
+    ${guest.resNo ? `<div style="margin-top:4px;font-size:0.68rem;color:var(--text-muted)">予約No: ${escHtml(guest.resNo)}</div>` : ''}
+    ${guest.plan ? `<div style="margin-top:3px;font-size:0.68rem;color:var(--text-muted);font-style:italic" title="${escHtml(guest.plan)}">📋 ${escHtml(guest.plan.length>36 ? guest.plan.slice(0,36)+'…' : guest.plan)}</div>` : ''}
+    ${guest.notes ? `<div style="margin-top:3px;font-size:0.68rem;color:var(--text-muted);border-top:1px solid var(--border);padding-top:3px;line-height:1.35" title="${escHtml(guest.notes)}">${escHtml(guest.notes.length>40 ? guest.notes.slice(0,40)+'…' : guest.notes)}</div>` : ''}
+    ${roomNumber !== null ? `<button class="remove-btn" title="未割当に戻す" onclick="unassignGuest('${guest.id}', event)">↩</button>` : `<button class="delete-guest-btn" title="予約を削除" onclick="deleteGuest('${guest.id}', event)">✕</button>`}
+    <button class="copy-guest-btn" title="予約をコピー" onclick="copyGuest('${guest.id}', event)">⧉</button>
+    <button class="merge-guest-btn" title="予約を統合" onclick="openMergeModal('${guest.id}', event)">⇌</button>
+    ${(guest.nights||1) >= 2 ? `<button class="split-guest-btn" title="統合を解除（日別に分割）" onclick="openSplitModal('${guest.id}', event)">⇎</button>` : ''}
+  `;
+  return card;
+}
+
+function createRoomCard(room) {
+  const date = getCurrentDate();
+  const asn = getAssignments(date);
+  const assignedGuests = (asn[room.number]||[]).map(id=>guests.find(g=>g.id===id)).filter(Boolean);
+  const occupied = assignedGuests.length > 0;
+
+  const card = document.createElement('div');
+  card.className = 'room-card' + (occupied?' occupied':'');
+  card.dataset.roomNumber = room.number;
+
+  card.innerHTML = `
+    <div class="room-card-header">
+      <span class="room-number">🚪 ${room.number}</span>
+      <span class="room-type-badge">${room.type}</span>
+      <span class="room-capacity">定員 ${room.capacity}名</span>
+
+    </div>
+    <div class="room-card-body" id="room_body_${room.number}">
+    </div>
+  `;
+
+  const body = card.querySelector('.room-card-body');
+  body.addEventListener('dragover', e => onDragOver(e, room.number));
+  body.addEventListener('dragleave', e => onDragLeave(e, room.number));
+  body.addEventListener('drop', e => onDrop(e, room.number));
+
+  if (assignedGuests.length === 0) {
+    body.innerHTML = '<div class="empty-hint">ここにドロップ</div>';
+  } else {
+    assignedGuests.forEach(g => body.appendChild(createGuestCard(g, room.number)));
+  }
+
+  return card;
+}
+
+// ===== DRAG & DROP =====
+function onDragStart(e, guestId, roomNumber) {
+  dragGuestId = guestId;
+  dragSourceRoom = roomNumber;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+function onDragOver(e, target) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const el = target === 'unassigned'
+    ? document.getElementById('unassignedList')
+    : document.getElementById('room_body_' + target);
+  if (el) el.closest('.room-card, .unassigned-list')?.classList.add('drag-over');
+  if (el) el.classList.add('drag-over');
+}
+function onDragLeave(e, target) {
+  const el = target === 'unassigned'
+    ? document.getElementById('unassignedList')
+    : document.getElementById('room_body_' + target);
+  if (el) el.closest('.room-card, .unassigned-list')?.classList.remove('drag-over');
+  if (el) el.classList.remove('drag-over');
+}
+
+function onDrop(e, target) {
+  e.preventDefault();
+  if (!dragGuestId) return;
+  const guest = guests.find(g=>g.id===dragGuestId);
+  if (!guest) return;
+  const date = getCurrentDate();
+  const asn = getAssignments(date);
+
+  // 元の場所から外す
+  if (dragSourceRoom !== null && dragSourceRoom !== 'unassigned') {
+    asn[dragSourceRoom] = (asn[dragSourceRoom]||[]).filter(id=>id!==dragGuestId);
+  }
+
+  if (target === 'unassigned') {
+    showToast(`${guest.name} を未割当に戻しました`);
+    dragGuestId = null; dragSourceRoom = null;
+    render(); return;
+  }
+
+  // 定員オーバーチェック
+  const room = rooms.find(r => r.number === target);
+  if (room) {
+    const currentCount = (asn[target]||[])
+      .filter(id => id !== dragGuestId)
+      .map(id => guests.find(g=>g.id===id))
+      .filter(Boolean)
+      .reduce((sum,g) => sum + (g.guests||1), 0);
+    const addCount = guest.guests || 1;
+    if (currentCount + addCount > room.capacity) {
+      if (!confirm(`定員オーバーです（定員${room.capacity}名、現在${currentCount}名＋追加${addCount}名）。
+それでも割当しますか？`)) {
+        // 元に戻す
+        if (dragSourceRoom && dragSourceRoom !== 'unassigned') {
+          if (!asn[dragSourceRoom]) asn[dragSourceRoom] = [];
+          if (!asn[dragSourceRoom].includes(dragGuestId)) asn[dragSourceRoom].push(dragGuestId);
+        }
+        dragGuestId = null; dragSourceRoom = null;
+        render(); return;
+      }
+    }
+  }
+
+  if (!asn[target]) asn[target] = [];
+  if (!asn[target].includes(dragGuestId)) asn[target].push(dragGuestId);
+
+  // checkInを自動設定（初回割当時）
+  if (!guest.checkIn) guest.checkIn = date;
+
+  // 連泊の場合：他の日付にも同部屋に自動割当
+  if (guest.nights > 1 && guest.checkIn) {
+    for (let n = 0; n < guest.nights; n++) {
+      const d = new Date(guest.checkIn);
+      d.setDate(d.getDate() + n);
+      const dateStr = d.toISOString().slice(0,10);
+      if (dateStr === date) continue; // 現在日は既に割当済み
+      const dayAsn = getAssignments(dateStr);
+      if (!dayAsn[target]) dayAsn[target] = [];
+      // その日まだ割当なければ追加
+      if (!dayAsn[target].includes(dragGuestId)) {
+        dayAsn[target].push(dragGuestId);
+      }
+    }
+    showToast(`${guest.name} → ${target}号室（${guest.nights}泊分を一括割当）`);
+  } else {
+    showToast(`${guest.name} → ${target}号室 に割当しました`);
+  }
+
+  dragGuestId = null;
+  dragSourceRoom = null;
+  render();
+}
+
+function unassignGuest(guestId, e) {
+  e.stopPropagation();
+  const guest = guests.find(g=>g.id===guestId);
+  if (!guest) return;
+  const date = getCurrentDate();
+  const asn = getAssignments(date);
+  const room = getGuestRoomOnDate(guestId, date);
+  if (room) asn[room] = (asn[room]||[]).filter(id=>id!==guestId);
+  showToast(`${guest.name} を未割当に戻しました`);
+  render();
+}
+
+function deleteGuest(guestId, e) {
+  e.stopPropagation();
+  const guest = guests.find(g=>g.id===guestId);
+  if (!guest) return;
+  if (!confirm(`「${guest.name}」の予約を削除します。よろしいですか？`)) return;
+  // 全日付の割当から除去
+  Object.keys(dateAssignments).forEach(d => {
+    Object.keys(dateAssignments[d]).forEach(room => {
+      dateAssignments[d][room] = (dateAssignments[d][room]||[]).filter(id=>id!==guestId);
+    });
+  });
+  guests = guests.filter(g=>g.id!==guestId);
+  showToast(`${guest.name} の予約を削除しました`);
+  render();
+}
+
+// ===== CSV IMPORT =====
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    parseCSV(text);
+    event.target.value = '';
+  };
+  reader.readAsText(file, 'Shift-JIS');
+}
+
+// 手間いらずCSV 列インデックス定義
+const CSV_COL = {
+  checkIn:  0, checkOut: 2, name: 3, source: 4,
+  resNo:    5, rooms:    6, adults: 7, children: 8,
+  nameKana: 9, plan:    10, payment: 12, nights: 13,
+};
+
+// 日付文字列を YYYY-MM-DD に正規化（2026/5/8 → 2026-05-08 など）
+function normalizeDate(str) {
+  if (!str) return '';
+  // スラッシュ区切りを変換
+  const m = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m) return str;
+  return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+}
+
+// プラン名から夕食・朝食メニューを判定するトップレベル関数
+// 戻り値: { dinner, breakfast }
+function detectMealFromPlan(plan) {
+  const p  = plan;
+  const lp = plan.toLowerCase();
+
+  // 優先順位順にチェック（上が優先）
+
+  // 1. 素泊まり系 → すべて✖
+  if (p.includes('素泊まり') || p.includes('食事なし')
+   || lp.includes('overnight') || lp.includes('no meal')
+   || lp.includes('room only') || lp.includes('room plan')
+   || (lp.includes('room') && !lp.includes('breakfast') && !lp.includes('dinner') && !lp.includes('meal') && !lp.includes('hb')))
+    return { dinner: '✖', breakfast: '✖' };
+
+  // 2. 夕朝食付き系（HB）
+  if (p.includes('HB') || lp.includes('half board'))
+    return { dinner: '夕あり', breakfast: '和食' };
+
+  // 3. 夕食メニュー指定系（朝食は和食セット）
+  if (p.includes('一泊二食') || p.includes('山水')
+   || lp.includes('kaiseki a') || lp.includes('standard'))
+    return { dinner: '会A', breakfast: '和食' };
+
+  if (p.includes('紫明') || lp.includes('kaiseki c') || lp.includes('kaiseki-special'))
+    return { dinner: '会C', breakfast: '和食' };
+
+  if (p.includes('すきやき') || lp.includes('sukiyaki'))
+    return { dinner: 'すき', breakfast: '和食' };
+
+  if (p.includes('しゃぶしゃぶ') || lp.includes('shabushabu'))
+    return { dinner: 'しゃぶ', breakfast: '和食' };
+
+  if (p.includes('ヘルシー') || lp.includes('healthy'))
+    return { dinner: 'ナベA', breakfast: '和食' };
+
+  if (p.includes('贅沢') || lp.includes('special udon'))
+    return { dinner: 'ナベC', breakfast: '和食' };
+
+  if (lp.includes('udon'))
+    return { dinner: 'ナベA', breakfast: '和食' };
+
+  // 4. 洋朝食のみ系
+  if (p.includes('洋の風味') || lp.includes('western'))
+    return { dinner: '✖', breakfast: 'パン' };
+
+  // 5. 和朝食のみ系
+  if (p.includes('お部屋タイプお約束プラン／朝食付き') || p.includes('小鉢')
+   || p.includes('Japanese') || lp.includes('breakfast included')
+   || lp.includes('breakfast') || p.includes('朝食'))
+    return { dinner: '✖', breakfast: '和食' };
+
+  // 6. 判定不能 → すべて空欄（未定）
+  return { dinner: '', breakfast: '' };
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) { showToast('データが見つかりません'); return; }
+
+  // 重複チェック用（同じ予約番号は取り込まない）
+  const existingResNos = new Set(guests.map(g => g.resNo).filter(Boolean));
+
+  let count = 0, skipped = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    const name = (cols[CSV_COL.name] || '').trim();
+    if (!name) continue;
+
+    const resNo = (cols[CSV_COL.resNo] || '').trim();
+    if (resNo && existingResNos.has(resNo)) { skipped++; continue; }
+    if (resNo) existingResNos.add(resNo);
+
+    const adults   = parseInt(cols[CSV_COL.adults]   || '0') || 0;
+    const children = parseInt(cols[CSV_COL.children] || '0') || 0;
+    const nights   = parseInt(cols[CSV_COL.nights]   || '1') || 1;
+    const checkIn  = normalizeDate((cols[CSV_COL.checkIn] || '').trim());
+    const checkOut = normalizeDate((cols[CSV_COL.checkOut] || '').trim());
+    const plan     = (cols[CSV_COL.plan]    || '').trim();
+    // プラン名から食事有無を判定
+    // プラン名からメニューを自動判定
+    const meal          = detectMealFromPlan(plan);
+    const dinnerMenu    = meal.dinner;
+    const breakfastMenu = meal.breakfast;
+    // 時間：✖なら✖、メニューあり/未定なら空欄
+    const dinnerTime    = dinnerMenu    === '✖' ? '✖' : '';
+    const breakfastTime = breakfastMenu === '✖' ? '✖' : '';
+
+    const roomCount = parseInt(cols[CSV_COL.rooms] || '1') || 1;
+
+    const guest = {
+      id:            'g_' + Date.now() + '_' + i,
+      name,
+      nameKana:      (cols[CSV_COL.nameKana] || '').trim(),
+      nights,
+      adults,
+      childA:        children,
+      childB:        0,
+      guests:        adults + children || 1,
+      source:        (() => {
+        const s = (cols[CSV_COL.source] || '').trim();
+        return s.includes('るるぶ') ? 'JTB' : s;
+      })(),
+      resNo,
+      plan,
+      payment:       (cols[CSV_COL.payment] || '').trim(),
+      checkIn,
+      checkOut,
+      dinner:        dinnerMenu,
+      dinnerTime:    dinnerTime,
+      breakfast:     breakfastMenu,
+      breakfastTime: breakfastTime,
+      billing:       (cols[CSV_COL.payment] || '').includes('現地') ? '' : '済',
+      notes:         '',
+      dailyMenus:    buildDailyMenus(checkIn, nights, dinnerMenu, dinnerTime, breakfastMenu, breakfastTime),
+    };
+    guests.push(guest);
+    count++;
+
+    // 部屋数が2以上なら追加の空ゲストを生成（2部屋目以降は人数0）
+    for (let r = 1; r < roomCount; r++) {
+      const extraGuest = {
+        id:            'g_' + Date.now() + '_' + i + '_r' + r,
+        name:          name + `（${r+1}部屋目）`,
+        nameKana:      '',
+        nights,
+        adults:        0,
+        childA:        0,
+        childB:        0,
+        guests:        0,
+        source:        guest.source,
+        resNo:         resNo ? resNo + `-r${r}` : '',
+        plan,
+        payment:       guest.payment,
+        checkIn,
+        checkOut,
+        dinner:        dinnerMenu,
+        dinnerTime:    dinnerTime,
+        breakfast:     breakfastMenu,
+        breakfastTime: breakfastTime,
+        billing:       guest.billing,
+        notes:         `${name} の${r+1}部屋目`,
+      };
+      guests.push(extraGuest);
+      count++;
+    }
+  }
+  const msg = skipped > 0 ? `${count}件取込（${skipped}件重複スキップ）` : `${count}件のゲストを取込みました`;
+  showToast(msg);
+  render();
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i+1] === '"') { current += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (ch === ',' && !inQuote) {
+      result.push(current); current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+// ===== SAMPLE CSV =====
+function downloadSampleCSV() {
+  const rows = [
+    ['氏名','泊数','人数','予約先','夕食メニュー','朝食メニュー','夕食時間','朝食時間','請求先','備考'],
+    ['山田 太郎','2','2','じゃらん','会席A','和食','18:00','07:30','山田 太郎','記念日'],
+    ['鈴木 花子','1','1','直接予約','通常','洋食','19:00','08:00','鈴木 花子',''],
+    ['田中 一郎','3','4','楽天トラベル','会席B','和洋折衷','18:30','07:00','ABC会社','アレルギー有'],
+  ];
+  const csv = rows.map(r => r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sample_guests.csv';
+  a.click();
+}
+
+// ===== EXPORT CSV =====
+
+// ===== GUEST MODAL =====
+function syncChildB(input) {
+  const newB = parseInt(input.value) || 0;
+  const aEl  = document.getElementById('f_childA');
+  const oldA = parseInt(aEl.value) || 0;
+  const oldB = parseInt(input.defaultValue) || 0;
+  const diff = newB - oldB;           // Bの増減分
+  const newA = Math.max(0, oldA - diff);
+  aEl.value = newA;
+  input.defaultValue = newB;          // 次回のベースを更新
+}
+
+function openAddGuestModal() {
+  editingGuestId = null;
+  document.getElementById('guestModalTitle').textContent = 'ゲスト追加';
+  ['f_name','f_notes','f_plan'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f_billing').value = '';
+  document.getElementById('f_nights').value = 1;
+  document.getElementById('f_adults').value = 1;
+  document.getElementById('f_childA').value = 0;
+  document.getElementById('f_childB').value = 0;
+  document.getElementById('f_childB').defaultValue = 0;
+  document.getElementById('f_source').value = '';
+  document.getElementById('dailyMenuTabs').innerHTML = '';
+  editingDailyMenus = {};
+  currentTabDate = null;
+  populateMealSelects();
+  document.getElementById('f_dinner').value = '';
+  document.getElementById('f_dinnerTime').value = '';
+  document.getElementById('f_breakfast').value = '✖';
+  document.getElementById('f_breakfastTime').value = '✖';
+  document.getElementById('guestModal').classList.remove('hidden');
+}
+
+function openEditGuestModal(guestId) {
+  const g = guests.find(x=>x.id===guestId);
+  if (!g) return;
+  editingGuestId = guestId;
+  document.getElementById('guestModalTitle').textContent = 'ゲスト情報編集';
+  document.getElementById('f_name').value    = g.name||'';
+  document.getElementById('f_nights').value  = g.nights||1;
+  document.getElementById('f_adults').value  = g.adults != null ? g.adults : (g.guests||1);
+  document.getElementById('f_childA').value  = g.childA||0;
+  document.getElementById('f_childB').value  = g.childB||0;
+  document.getElementById('f_childB').defaultValue = g.childB||0;
+  document.getElementById('f_source').value  = g.source||'';
+  document.getElementById('f_billing').value = g.billing||'';
+  document.getElementById('f_plan').value    = g.plan||'';
+  document.getElementById('f_notes').value   = g.notes||'';
+  buildDailyMenuTabs(g);
+  document.getElementById('guestModal').classList.remove('hidden');
+}
+
+let currentTabDate = null; // 現在表示中の日付タブ
+let editingDailyMenus = {}; // モーダル内での一時保存
+
+function buildDailyMenuTabs(g) {
+  const nights  = g.nights || 1;
+  const checkIn = g.checkIn;
+  const tabsEl  = document.getElementById('dailyMenuTabs');
+  tabsEl.innerHTML = '';
+  editingDailyMenus = JSON.parse(JSON.stringify(g.dailyMenus || {}));
+
+  // 日別人数フィールドの表示制御
+  const dailyGuestsRow = document.getElementById('dailyGuestsRow');
+
+  // 1泊の場合はタブなしで従来通り単一表示
+  if (nights <= 1 || !checkIn) {
+    dailyGuestsRow.style.display = 'none';
+    const m = g.dailyMenus && checkIn && g.dailyMenus[checkIn]
+      ? g.dailyMenus[checkIn]
+      : g;
+    populateMealSelects(m.dinner, m.dinnerTime, m.breakfast, m.breakfastTime);
+    currentTabDate = checkIn || null;
+    return;
+  }
+
+  // 連泊の場合は日別人数フィールドを表示
+  dailyGuestsRow.style.display = 'block';
+
+  // 各日の dailyMenus に人数が未設定なら基本値で初期化
+  for (let n = 0; n < nights; n++) {
+    const d = new Date(checkIn);
+    d.setDate(d.getDate() + n);
+    const dateStr = d.toISOString().slice(0,10);
+    if (!editingDailyMenus[dateStr]) editingDailyMenus[dateStr] = {};
+    if (editingDailyMenus[dateStr].adults == null) {
+      editingDailyMenus[dateStr].adults = g.adults != null ? g.adults : (g.guests||1);
+      editingDailyMenus[dateStr].childA = g.childA || 0;
+      editingDailyMenus[dateStr].childB = g.childB || 0;
+    }
+  }
+
+  // タブ生成
+  for (let n = 0; n < nights; n++) {
+    const d = new Date(checkIn);
+    d.setDate(d.getDate() + n);
+    const dateStr = d.toISOString().slice(0,10);
+    const label   = `${d.getMonth()+1}/${d.getDate()}（${n+1}泊目）`;
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'daily-tab' + (n === 0 ? ' active' : '');
+    btn.textContent = label;
+    btn.dataset.date = dateStr;
+    btn.onclick = () => switchDailyTab(btn, dateStr);
+    tabsEl.appendChild(btn);
+  }
+
+  // 1泊目を表示
+  const firstDate = new Date(checkIn).toISOString().slice(0,10);
+  switchDailyTab(tabsEl.querySelector('.daily-tab'), firstDate, true);
+}
+
+function switchDailyTab(btn, date, init=false) {
+  // 現在タブの値を保存
+  if (!init && currentTabDate) {
+    editingDailyMenus[currentTabDate] = {
+      dinner:        document.getElementById('f_dinner').value,
+      dinnerTime:    document.getElementById('f_dinnerTime').value,
+      breakfast:     document.getElementById('f_breakfast').value,
+      breakfastTime: document.getElementById('f_breakfastTime').value,
+      adults: parseInt(document.getElementById('f_daily_adults').value) || 0,
+      childA: parseInt(document.getElementById('f_daily_childA').value) || 0,
+      childB: parseInt(document.getElementById('f_daily_childB').value) || 0,
+    };
+  }
+  // タブ切替
+  document.querySelectorAll('.daily-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTabDate = date;
+  // 選択日のメニュー・人数をフォームに反映
+  const m = editingDailyMenus[date] || {};
+  populateMealSelects(m.dinner, m.dinnerTime, m.breakfast, m.breakfastTime);
+  if (document.getElementById('dailyGuestsRow').style.display !== 'none') {
+    document.getElementById('f_daily_adults').value = m.adults != null ? m.adults : 0;
+    document.getElementById('f_daily_childA').value = m.childA != null ? m.childA : 0;
+    document.getElementById('f_daily_childB').value = m.childB != null ? m.childB : 0;
+  }
+}
+
+function saveGuest() {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { showToast('氏名を入力してください'); return; }
+
+  // 現在タブの値を保存
+  if (currentTabDate) {
+    const isDailyGuests = document.getElementById('dailyGuestsRow').style.display !== 'none';
+    editingDailyMenus[currentTabDate] = {
+      dinner:        document.getElementById('f_dinner').value,
+      dinnerTime:    document.getElementById('f_dinnerTime').value,
+      breakfast:     document.getElementById('f_breakfast').value,
+      breakfastTime: document.getElementById('f_breakfastTime').value,
+      adults: isDailyGuests ? (parseInt(document.getElementById('f_daily_adults').value) || 0) : undefined,
+      childA: isDailyGuests ? (parseInt(document.getElementById('f_daily_childA').value) || 0) : undefined,
+      childB: isDailyGuests ? (parseInt(document.getElementById('f_daily_childB').value) || 0) : undefined,
+    };
+  }
+
+  if (editingGuestId) {
+    const g = guests.find(x=>x.id===editingGuestId);
+    if (g) {
+      Object.assign(g, getFormData(name));
+      g.dailyMenus = editingDailyMenus;
+    }
+    showToast('ゲスト情報を更新しました');
+  } else {
+    const fd = getFormData(name);
+    const g = { id:'g_'+Date.now(), assignedRoom: null, ...fd, dailyMenus: editingDailyMenus };
+    guests.push(g);
+    showToast(`${name} を追加しました`);
+  }
+  closeModal('guestModal');
+  render();
+}
+
+function getFormData(name) {
+  const adults = parseInt(document.getElementById('f_adults').value)||0;
+  const childA = parseInt(document.getElementById('f_childA').value)||0;
+  const childB = parseInt(document.getElementById('f_childB').value)||0;
+  return {
+    name,
+    nights: parseInt(document.getElementById('f_nights').value)||1,
+    adults,
+    childA,
+    childB,
+    guests: adults + childA + childB || 1,
+    source: document.getElementById('f_source').value,
+    dinner: document.getElementById('f_dinner').value,
+    dinnerTime: document.getElementById('f_dinnerTime').value,
+    breakfast: document.getElementById('f_breakfast').value,
+    breakfastTime: document.getElementById('f_breakfastTime').value,
+    billing: document.getElementById('f_billing').value,
+    plan:  document.getElementById('f_plan').value.trim(),
+    notes: document.getElementById('f_notes').value.trim(),
+  };
+}
+
+// ===== ROOM MODAL =====
+function openAddRoomModal() {
+  document.getElementById('roomModalTitle').textContent = '客室を追加';
+  document.getElementById('r_number').value = '';
+  document.getElementById('r_type').value = '10畳';
+  document.getElementById('r_capacity').value = 2;
+  document.getElementById('roomModal').classList.remove('hidden');
+}
+
+function saveRoom() {
+  const number = document.getElementById('r_number').value.trim();
+  if (!number) { showToast('部屋番号を入力してください'); return; }
+  if (rooms.find(r=>r.number===number)) { showToast('既に存在する部屋番号です'); return; }
+  rooms.push({
+    number,
+    type: document.getElementById('r_type').value,
+    capacity: parseInt(document.getElementById('r_capacity').value)||2,
+  });
+  // 全日付のassignmentsに新部屋を追加
+  Object.keys(dateAssignments).forEach(d => {
+    if (!dateAssignments[d][number]) dateAssignments[d][number] = [];
+  });
+  closeModal('roomModal');
+  showToast(`${number}号室を追加しました`);
+  render();
+}
+
+function deleteRoom(roomNumber, e) {
+  e.stopPropagation();
+  // 全日付で割当確認
+  const hasGuest = Object.values(dateAssignments).some(asn => (asn[roomNumber]||[]).length > 0);
+  if (hasGuest) {
+    if (!confirm(`${roomNumber}号室にゲストが割当されています。\n削除すると未割当に戻ります。続けますか？`)) return;
+  }
+  rooms = rooms.filter(r=>r.number!==roomNumber);
+  Object.keys(dateAssignments).forEach(d => { delete dateAssignments[d][roomNumber]; });
+  showToast(`${roomNumber}号室を削除しました`);
+  render();
+}
+
+
+// ===== MENU SETTINGS MODAL =====
+function openMenuSettingsModal() {
+  const toLines = arr => arr.join('\n');
+  document.getElementById('ms_dinnerMenus').value    = toLines(menuSettings.dinnerMenus);
+  document.getElementById('ms_dinnerTimes').value    = toLines(menuSettings.dinnerTimes);
+  document.getElementById('ms_breakfastMenus').value = toLines(menuSettings.breakfastMenus);
+  document.getElementById('ms_breakfastTimes').value = toLines(menuSettings.breakfastTimes);
+  document.getElementById('menuSettingsModal').classList.remove('hidden');
+}
+
+function saveMenuSettings() {
+  const toArr = id => document.getElementById(id).value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  menuSettings.dinnerMenus    = toArr('ms_dinnerMenus');
+  menuSettings.dinnerTimes    = toArr('ms_dinnerTimes');
+  menuSettings.breakfastMenus = toArr('ms_breakfastMenus');
+  menuSettings.breakfastTimes = toArr('ms_breakfastTimes');
+  // デフォルトの「なし」を先頭に保証
+  // ✖（食事なし）を先頭に、―（未定）を2番目に保証
+  ['dinnerMenus','breakfastMenus'].forEach(k => {
+    menuSettings[k] = menuSettings[k].filter(v => v !== 'なし' && v !== '✖');
+    menuSettings[k].unshift('✖');
+  });
+  ['dinnerTimes','breakfastTimes'].forEach(k => {
+    menuSettings[k] = menuSettings[k].filter(v => v !== '✖' && v !== '―（未定）');
+    menuSettings[k].unshift('―（未定）');
+    menuSettings[k].unshift('✖');
+  });
+  saveState();
+  showToast('メニュー設定を保存しました');
+  closeModal('menuSettingsModal');
+}
+
+// ===== ROOM SETTINGS MODAL =====
+let editingRoomNumber = null;
+
+function openRoomSettingsModal() {
+  editingRoomNumber = null;
+  resetRoomSettingsForm();
+  renderRoomSettingsList();
+  document.getElementById('roomSettingsModal').classList.remove('hidden');
+}
+
+function renderRoomSettingsList() {
+  const el = document.getElementById('roomSettingsList');
+  if (!rooms.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:12px;font-size:0.8rem;">部屋が登録されていません</div>';
+    return;
+  }
+  el.innerHTML = rooms.map(r => {
+    const isDefault = DEFAULT_ROOMS.find(x => x.number === r.number);
+    const delBtn = isDefault
+      ? `<button class="rs-del-btn" disabled style="opacity:0.3;cursor:not-allowed" title="固定客室は削除できません">削除</button>`
+      : `<button class="rs-del-btn" onclick="deleteRoomFromSettings('${escHtml(r.number)}')">削除</button>`;
+    const lockIcon = isDefault ? ' 🔒' : '';
+    return `
+    <div class="rs-room-row">
+      <span class="rs-room-num">🚪 ${escHtml(r.number)}${lockIcon}</span>
+      <span class="rs-room-type">${escHtml(r.type)}</span>
+      <span class="rs-room-cap">定員 ${r.capacity}名</span>
+      <button class="rs-edit-btn" onclick="editRoomFromSettings('${escHtml(r.number)}')">編集</button>
+      ${delBtn}
+    </div>`;
+  }).join('');
+}
+
+function editRoomFromSettings(number) {
+  const r = rooms.find(x => x.number === number);
+  if (!r) return;
+  editingRoomNumber = number;
+  document.getElementById('rs_number').value = r.number;
+  document.getElementById('rs_type').value = r.type;
+  document.getElementById('rs_capacity').value = r.capacity;
+  document.getElementById('roomFormTitle').textContent = '編集中：' + number;
+  document.getElementById('rs_saveBtn').textContent = '更新';
+}
+
+function deleteRoomFromSettings(number) {
+  if (DEFAULT_ROOMS.find(r => r.number === number)) {
+    showToast('固定客室は削除できません');
+    return;
+  }
+  const hasGuest = Object.values(dateAssignments).some(asn => (asn[number]||[]).length > 0);
+  const msg = hasGuest
+    ? number + '号室にゲストが割当されています。\n削除するとゲストが未割当に戻ります。続けますか？'
+    : number + '号室を削除します。よろしいですか？';
+  if (!confirm(msg)) return;
+  rooms = rooms.filter(r => r.number !== number);
+  Object.keys(dateAssignments).forEach(d => { delete dateAssignments[d][number]; });
+  showToast(number + '号室を削除しました');
+  renderRoomSettingsList();
+  render();
+}
+
+function saveRoomFromSettings() {
+  const number = document.getElementById('rs_number').value.trim();
+  if (!number) { showToast('部屋番号を入力してください'); return; }
+  const type     = document.getElementById('rs_type').value;
+  const capacity = parseInt(document.getElementById('rs_capacity').value) || 2;
+
+  if (editingRoomNumber) {
+    const r = rooms.find(x => x.number === editingRoomNumber);
+    if (r) {
+      if (number !== editingRoomNumber) {
+        if (rooms.find(x => x.number === number)) { showToast('既に存在する部屋番号です'); return; }
+        Object.keys(dateAssignments).forEach(d => {
+          dateAssignments[d][number] = dateAssignments[d][editingRoomNumber] || [];
+          delete dateAssignments[d][editingRoomNumber];
+        });
+        r.number = number;
+      }
+      r.type = type; r.capacity = capacity;
+    }
+    showToast(number + '号室を更新しました');
+  } else {
+    if (rooms.find(r => r.number === number)) { showToast('既に存在する部屋番号です'); return; }
+    rooms.push({ number, type, capacity });
+    Object.keys(dateAssignments).forEach(d => {
+      if (!dateAssignments[d][number]) dateAssignments[d][number] = [];
+    });
+    showToast(number + '号室を追加しました');
+  }
+  resetRoomSettingsForm();
+  renderRoomSettingsList();
+  render();
+}
+
+function resetRoomSettingsForm() {
+  editingRoomNumber = null;
+  document.getElementById('rs_number').value = '';
+  document.getElementById('rs_type').value = '10畳';
+  document.getElementById('rs_capacity').value = 2;
+  document.getElementById('roomFormTitle').textContent = '新規追加';
+  document.getElementById('rs_saveBtn').textContent = '追加';
+}
+
+// ===== COMPACT MODE =====
+function toggleCompact(on) {
+  const grid = document.getElementById('roomGrid');
+  const ct   = document.getElementById('compactTable');
+  grid.style.display = on ? 'none' : '';
+  ct.style.display   = on ? 'block' : 'none';
+  localStorage.setItem('compactMode', on ? '1' : '0');
+  if (on) { try { renderCompactTable(); } catch(e) { console.error('renderCompactTable error:', e); } }
+}
+
+// 日別メニュー初期生成（1泊目：本来のメニュー、2泊目以降：夕あり）
+function buildDailyMenus(checkIn, nights, dinner, dinnerTime, breakfast, breakfastTime) {
+  if (!checkIn || nights <= 1) return {};
+  const result = {};
+  for (let n = 0; n < nights; n++) {
+    const d = new Date(checkIn);
+    d.setDate(d.getDate() + n);
+    const dateStr = d.toISOString().slice(0, 10);
+    if (n === 0) {
+      result[dateStr] = { dinner, dinnerTime, breakfast, breakfastTime };
+    } else {
+      result[dateStr] = {
+        dinner:        dinner === '✖' ? '✖' : '夕あり',
+        dinnerTime:    dinner === '✖' ? '✖' : '',
+        breakfast,
+        breakfastTime,
+      };
+    }
+  }
+  return result;
+}
+
+// 日別メニュー取得（dailyMenusがあれば優先、なければ基本値）
+function getGuestMenu(g, date) {
+  if (g.dailyMenus && g.dailyMenus[date]) {
+    const d = g.dailyMenus[date];
+    return {
+      dinner:        d.dinner        != null ? d.dinner        : (g.dinner        || ''),
+      dinnerTime:    d.dinnerTime    != null ? d.dinnerTime    : (g.dinnerTime    || ''),
+      breakfast:     d.breakfast     != null ? d.breakfast     : (g.breakfast     || ''),
+      breakfastTime: d.breakfastTime != null ? d.breakfastTime : (g.breakfastTime || ''),
+      adults:        d.adults        != null ? d.adults        : (g.adults != null ? g.adults : (g.guests||1)),
+      childA:        d.childA        != null ? d.childA        : (g.childA || 0),
+      childB:        d.childB        != null ? d.childB        : (g.childB || 0),
+    };
+  }
+  return {
+    dinner:        g.dinner        || '',
+    dinnerTime:    g.dinnerTime    || '',
+    breakfast:     g.breakfast     || '',
+    breakfastTime: g.breakfastTime || '',
+    adults:        g.adults != null ? g.adults : (g.guests||1),
+    childA:        g.childA || 0,
+    childB:        g.childB || 0,
+  };
+}
+
+function getMealClass(g, date) {
+  const m = date ? getGuestMenu(g, date) : g;
+  const dinnerExists    = m.dinner    !== '✖' && m.dinner    != null && m.dinner    !== '';
+  const breakfastExists = m.breakfast !== '✖' && m.breakfast != null && m.breakfast !== '';
+  if (dinnerExists && breakfastExists) return 'meal-both';
+  if (dinnerExists)                    return 'meal-dinner';
+  if (breakfastExists)                 return 'meal-breakfast';
+  return 'meal-none';
+}
+
+function getNightLabel(g, date) {
+  const total = g.nights || 1;
+  if (!g.checkIn || !date) return `1/${total}`;
+  const ci = new Date(g.checkIn);
+  const dt = new Date(date);
+  const diff = Math.round((dt - ci) / 86400000) + 1;
+  const cur = Math.max(1, Math.min(diff, total));
+  return `${cur}/${total}`;
+}
+
+function renderCompactTable() {
+  const date = getCurrentDate();
+  const asn  = getAssignments(date);
+  const wrap = document.getElementById('compactTable');
+
+  // デフォルト列幅（px）。保存済みがあれば復元
+  const COL_KEYS = ['部屋','氏名','泊','計','大','A','B','夕食','朝食','備考'];
+  const DEFAULT_WIDTHS = [44, 120, 36, 30, 26, 26, 26, 72, 72, 80];
+  const saved = (() => { try { return JSON.parse(localStorage.getItem('ctColWidths')||'null'); } catch(e){ return null; } })();
+  const colWidths = (saved && saved.length === COL_KEYS.length) ? saved : [...DEFAULT_WIDTHS];
+
+  const table = document.createElement('table');
+
+  // colgroup
+  const cg = document.createElement('colgroup');
+  colWidths.forEach((w, i) => {
+    const col = document.createElement('col');
+    col.style.width = w + 'px';
+    col.dataset.ci  = i;
+    cg.appendChild(col);
+  });
+  table.appendChild(cg);
+
+  // thead
+  const thead = table.createTHead();
+  const hrow  = thead.insertRow();
+  COL_KEYS.forEach((t, i) => {
+    const th = document.createElement('th');
+    th.textContent = t;
+    // リサイズハンドル
+    const handle = document.createElement('div');
+    handle.className = 'ct-resize-handle';
+    handle.addEventListener('mousedown', e => startColResize(e, cg, i, colWidths));
+    th.appendChild(handle);
+    hrow.appendChild(th);
+  });
+
+  const tbody = table.createTBody();
+
+  rooms.forEach(room => {
+    const assigned = (asn[room.number]||[])
+      .map(id => guests.find(g => g.id === id))
+      .filter(g => {
+        if (!g) return false;
+        const ci = g.checkIn, co = g.checkOut;
+        if (!ci || !date) return true;
+        if (co) return ci <= date && co > date;
+        const end = new Date(ci);
+        end.setDate(end.getDate() + (g.nights||1));
+        return date >= ci && date < end.toISOString().slice(0,10);
+      });
+
+    if (assigned.length === 0) {
+      const tr = tbody.insertRow();
+      tr.className = 'ct-empty';
+      tr.setAttribute('data-room', room.number);
+      tr.addEventListener('dragover',  e => { e.preventDefault(); tr.classList.add('ct-drag-over'); });
+      tr.addEventListener('dragleave', ()=> tr.classList.remove('ct-drag-over'));
+      tr.addEventListener('drop',      e => { tr.classList.remove('ct-drag-over'); onDrop(e, room.number); });
+      const tdRoom = tr.insertCell(); tdRoom.className = 'ct-room'; tdRoom.textContent = room.number;
+      const tdName = tr.insertCell(); tdName.className = 'ct-name'; tdName.textContent = '―';
+      for (let i=0;i<8;i++) tr.insertCell();
+    } else {
+      assigned.forEach((g, gi) => {
+        const adults = g.adults||0, ca = g.childA||0, cb = g.childB||0;
+        const pax    = adults + ca + cb || g.guests || 1;
+        const note   = g.notes ? g.notes.slice(0,5) + (g.notes.length > 5 ? '…' : '') : '';
+        const isLast = gi === assigned.length - 1;
+        const menu   = getGuestMenu(g, date);
+
+        const tr = tbody.insertRow();
+        if (assigned.length > 1) tr.className = isLast ? 'ct-multi-last' : 'ct-multi';
+        tr.setAttribute('data-room', room.number);
+
+        tr.addEventListener('dragover',  e => { e.preventDefault(); tr.classList.add('ct-drag-over'); });
+        tr.addEventListener('dragleave', ()=> tr.classList.remove('ct-drag-over'));
+        tr.addEventListener('drop',      e => { tr.classList.remove('ct-drag-over'); onDrop(e, room.number); });
+
+        const tdRoom = tr.insertCell(); tdRoom.className = 'ct-room';
+        tdRoom.textContent = gi === 0 ? room.number : '';
+
+        const tdName = tr.insertCell(); tdName.className = 'ct-name';
+        const chip = document.createElement('span');
+        chip.className = `ct-chip ${getMealClass(g, date)}`;
+        chip.textContent = g.name;
+        chip.draggable = true;
+        chip.addEventListener('dragstart', e => { onDragStart(e, g.id, room.number); chip.classList.add('dragging'); });
+        chip.addEventListener('dragend',   e => { onDragEnd(e); chip.classList.remove('dragging'); });
+        chip.addEventListener('dblclick',  () => openEditGuestModal(g.id));
+        tdName.appendChild(chip);
+
+        const tdNights = tr.insertCell(); tdNights.className = 'ct-nights';
+        tdNights.textContent = getNightLabel(g, date);
+
+        const tdPax = tr.insertCell(); tdPax.className = 'ct-pax';
+        tdPax.textContent = pax;
+
+        const tdA = tr.insertCell(); tdA.className = 'ct-pax';
+        tdA.textContent = adults || '';
+
+        const tdCA = tr.insertCell(); tdCA.className = 'ct-pax';
+        tdCA.textContent = ca || '';
+
+        const tdCB = tr.insertCell(); tdCB.className = 'ct-pax';
+        tdCB.textContent = cb || '';
+
+        const tdD = tr.insertCell(); tdD.className = 'ct-meal';
+        tdD.textContent = menu.dinner || '';
+
+        const tdB = tr.insertCell(); tdB.className = 'ct-meal';
+        tdB.textContent = menu.breakfast || '';
+
+        const tdNotes = tr.insertCell(); tdNotes.className = 'ct-notes';
+        tdNotes.textContent = note;
+      });
+    }
+  });
+
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
+
+// 列リサイズ
+function startColResize(e, cg, colIndex, colWidths) {
+  e.preventDefault();
+  e.stopPropagation();
+  const startX = e.clientX;
+  const startW = colWidths[colIndex];
+  const handle = e.target;
+  handle.classList.add('resizing');
+
+  const onMove = ev => {
+    const newW = Math.max(20, startW + ev.clientX - startX);
+    colWidths[colIndex] = newW;
+    cg.children[colIndex].style.width = newW + 'px';
+  };
+  const onUp = () => {
+    handle.classList.remove('resizing');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    try { localStorage.setItem('ctColWidths', JSON.stringify(colWidths)); } catch(e){}
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ===== SPLIT GUEST =====
+let splitSourceId = null;
+
+function openSplitModal(guestId, e) {
+  e.stopPropagation();
+  const g = guests.find(x => x.id === guestId);
+  if (!g || (g.nights||1) < 2) return;
+  splitSourceId = guestId;
+
+  // プレビュー生成
+  const nights = g.nights || 1;
+  const lines = [];
+  for (let n = 0; n < nights; n++) {
+    let dateStr = '日付不明';
+    if (g.checkIn) {
+      const d = new Date(g.checkIn);
+      d.setDate(d.getDate() + n);
+      dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+    }
+    const menu = getGuestMenu(g, g.checkIn ? (() => { const d = new Date(g.checkIn); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); })() : null);
+    lines.push(`${n+1}泊目（${dateStr}〜1泊）　夕食：${menu.dinner||'―'}　朝食：${menu.breakfast||'―'}`);
+  }
+  document.getElementById('splitPreview').innerHTML =
+    `<b>${escHtml(g.name)}</b>（${nights}泊）を以下に分割：<br>` + lines.map(l => `・${escHtml(l)}`).join('<br>');
+  document.getElementById('splitModal').classList.remove('hidden');
+}
+
+function executeSplit() {
+  const g = guests.find(x => x.id === splitSourceId);
+  if (!g) return;
+  const nights   = g.nights || 1;
+  const checkIn  = g.checkIn;
+  const newGuests = [];
+
+  for (let n = 0; n < nights; n++) {
+    let nightDate = checkIn;
+    let checkOut  = null;
+    if (checkIn) {
+      const ci = new Date(checkIn);
+      ci.setDate(ci.getDate() + n);
+      nightDate = ci.toISOString().slice(0,10);
+      const co = new Date(ci);
+      co.setDate(co.getDate() + 1);
+      checkOut = co.toISOString().slice(0,10);
+    }
+    const menu = getGuestMenu(g, nightDate);
+    const ng = {
+      ...g,
+      id:            n === 0 ? g.id : 'g_' + Date.now() + '_s' + n,
+      nights:        1,
+      checkIn:       nightDate,
+      checkOut:      checkOut,
+      dinner:        menu.dinner,
+      dinnerTime:    menu.dinnerTime,
+      breakfast:     menu.breakfast,
+      breakfastTime: menu.breakfastTime,
+      dailyMenus:    {},
+    };
+    newGuests.push(ng);
+  }
+
+  // 割当の引き継ぎ：元IDを新IDに置換（各日付ごと）
+  newGuests.forEach(ng => {
+    if (!ng.checkIn) return;
+    Object.keys(dateAssignments).forEach(d => {
+      if (d !== ng.checkIn) return;
+      Object.keys(dateAssignments[d]).forEach(room => {
+        const arr = dateAssignments[d][room];
+        const idx = arr.indexOf(g.id);
+        if (idx !== -1) {
+          arr[idx] = ng.id;
+        }
+      });
+    });
+  });
+
+  // 元ゲストを置換、追加ゲストをpush
+  const srcIdx = guests.findIndex(x => x.id === g.id);
+  guests.splice(srcIdx, 1, newGuests[0]);
+  for (let i = 1; i < newGuests.length; i++) guests.push(newGuests[i]);
+
+  closeModal('splitModal');
+  showToast(`「${g.name}」を${nights}件の予約に分割しました`);
+  render();
+}
+
+// ===== COPY GUEST =====
+function copyGuest(guestId, e) {
+  e.stopPropagation();
+  const src = guests.find(g => g.id === guestId);
+  if (!src) return;
+  const copy = { ...src, id: 'g_' + Date.now(), name: src.name + '（コピー）', notes: src.notes || '' };
+  guests.push(copy);
+  showToast(`「${src.name}」の予約をコピーしました`);
+  render();
+  // コピーした予約の編集モーダルを開く
+  openEditGuestModal(copy.id);
+}
+
+// ===== MERGE GUESTS =====
+let mergeSourceId = null;
+
+function openMergeModal(guestId, e) {
+  e.stopPropagation();
+  mergeSourceId = guestId;
+  const src = guests.find(g => g.id === guestId);
+  if (!src) return;
+
+  // ソース情報表示
+  const srcDate = src.checkIn || '日付未設定';
+  document.getElementById('mergeSourceInfo').innerHTML =
+    `<strong>統合元：</strong>${escHtml(src.name)}　${srcDate}チェックイン　${src.nights||1}泊`;
+
+  // 統合候補リスト（同名ゲスト優先、自分以外）
+  const sel = document.getElementById('mergeTargetSelect');
+  sel.innerHTML = '<option value="">― 選択してください ―</option>';
+  guests
+    .filter(g => g.id !== guestId)
+    .sort((a, b) => {
+      // 同名を先頭に
+      const aMatch = a.name === src.name ? 0 : 1;
+      const bMatch = b.name === src.name ? 0 : 1;
+      if (aMatch !== bMatch) return aMatch - bMatch;
+      return (a.checkIn || '').localeCompare(b.checkIn || '');
+    })
+    .forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      const ci = g.checkIn || '日付未設定';
+      opt.textContent = `${g.name}　${ci}チェックイン　${g.nights||1}泊`;
+      sel.appendChild(opt);
+    });
+
+  sel.onchange = updateMergePreview;
+  document.getElementById('mergePreview').style.display = 'none';
+  document.getElementById('mergeModal').classList.remove('hidden');
+}
+
+function updateMergePreview() {
+  const targetId = document.getElementById('mergeTargetSelect').value;
+  const preview  = document.getElementById('mergePreview');
+  if (!targetId || !mergeSourceId) { preview.style.display = 'none'; return; }
+  const src = guests.find(g => g.id === mergeSourceId);
+  const tgt = guests.find(g => g.id === targetId);
+  if (!src || !tgt) return;
+
+  // 早い方をチェックイン、遅い方のチェックアウトを使って泊数計算
+  const dates = [src.checkIn, tgt.checkIn].filter(Boolean).sort();
+  const newCheckIn = dates[0] || src.checkIn;
+
+  // チェックアウト日を両者で計算し、遅い方を採用
+  function getCheckOut(g) {
+    if (g.checkOut) return g.checkOut;
+    if (g.checkIn && g.nights) {
+      const d = new Date(g.checkIn);
+      d.setDate(d.getDate() + g.nights);
+      return d.toISOString().slice(0,10);
+    }
+    return null;
+  }
+  const co1 = getCheckOut(src);
+  const co2 = getCheckOut(tgt);
+  const newCheckOut = [co1, co2].filter(Boolean).sort().pop();
+
+  let newNights = src.nights || 1;
+  if (newCheckIn && newCheckOut) {
+    newNights = Math.round((new Date(newCheckOut) - new Date(newCheckIn)) / 86400000);
+  }
+
+  preview.style.display = 'block';
+  preview.innerHTML = `<strong>統合後プレビュー：</strong>${escHtml(src.name)}　${newCheckIn}チェックイン　<strong>${newNights}泊</strong>（チェックアウト ${newCheckOut||'未定'}）<br><small style="color:var(--text-muted)">「${escHtml(tgt.name)}」の予約は削除されます</small>`;
+}
+
+function executeMerge() {
+  const targetId = document.getElementById('mergeTargetSelect').value;
+  if (!targetId) { showToast('統合する予約を選択してください'); return; }
+  const src = guests.find(g => g.id === mergeSourceId);
+  const tgt = guests.find(g => g.id === targetId);
+  if (!src || !tgt) return;
+
+  function getCheckOut(g) {
+    if (g.checkOut) return g.checkOut;
+    if (g.checkIn && g.nights) {
+      const d = new Date(g.checkIn);
+      d.setDate(d.getDate() + g.nights);
+      return d.toISOString().slice(0,10);
+    }
+    return null;
+  }
+  const dates = [src.checkIn, tgt.checkIn].filter(Boolean).sort();
+  const newCheckIn  = dates[0] || src.checkIn;
+  const co1 = getCheckOut(src);
+  const co2 = getCheckOut(tgt);
+  const newCheckOut = [co1, co2].filter(Boolean).sort().pop();
+  let newNights = src.nights || 1;
+  if (newCheckIn && newCheckOut) {
+    newNights = Math.round((new Date(newCheckOut) - new Date(newCheckIn)) / 86400000);
+  }
+
+  // 統合先の割当を統合元にマージ
+  Object.keys(dateAssignments).forEach(d => {
+    Object.keys(dateAssignments[d]).forEach(room => {
+      const arr = dateAssignments[d][room];
+      if (arr.includes(targetId)) {
+        arr.splice(arr.indexOf(targetId), 1);
+        if (!arr.includes(mergeSourceId)) arr.push(mergeSourceId);
+      }
+    });
+  });
+
+  // 統合元を更新
+  src.checkIn  = newCheckIn;
+  src.checkOut = newCheckOut;
+  src.nights   = newNights;
+
+  // 統合先を削除
+  guests = guests.filter(g => g.id !== targetId);
+
+  closeModal('mergeModal');
+  showToast(`「${src.name}」に統合しました（${newNights}泊）`);
+  render();
+}
+
+// ===== STAY LINK =====
+function jumpToDate(dateStr, e) {
+  if (e) e.stopPropagation();
+  document.getElementById('targetDate').value = dateStr;
+  updateDateBtns();
+  saveState();
+  render();
+}
+
+// ===== UTILS =====
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+function escHtml(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+let toastTimer;
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  if (toastTimer) clearTimeout(toastTimer);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  toastTimer = setTimeout(() => el.remove(), 2800);
+}
+
+// モーダル外クリックで閉じる
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  });
+});
+
+
+// ===== PRINT =====
+function printRoomList() {
+  const date = getCurrentDate();
+  const asn = getAssignments(date);
+
+  // AGT省略マップ（指定外は空欄）
+  const agtAbbr = src => {
+    if (!src) return '';
+    if (src.includes('楽天')) return '楽天';
+    if (src.includes('じゃらん')) return 'じゃ';
+    if (src.includes('Booking') || src.includes('booking')) return 'ﾌﾞｯｷ';
+    if (src.includes('JTB') || src.includes('るるぶ')) return 'JTB';
+    if (src.includes('一休')) return '一休';
+    if (src.includes('Expedia') || src.includes('expedia')) return 'ｴｸｽ';
+    if (src.includes('HP') || src.includes('直接') || src.includes('ホームページ')) return 'HP';
+    if (src.includes('手間')) return '手間';
+    return ''; // 指定外は空欄
+  };
+
+  // 氏名から「（N部屋目）」サフィックスを除去
+  const cleanName = name => (name || '').replace(/（\d+部屋目）$/, '');
+
+  // 泊数分数計算
+  const nightLabel = g => {
+    const total = g.nights || 1;
+    if (!g.checkIn || !date) return `1/${total}`;
+    const diff = Math.round((new Date(date) - new Date(g.checkIn)) / 86400000) + 1;
+    const cur = Math.max(1, Math.min(diff, total));
+    return `${cur}/${total}`;
+  };
+
+  // 日付ヘッダー
+  const d = new Date(date);
+  const weekday = ['日','月','火','水','木','金','土'][d.getDay()];
+  const dateStr = `${d.getMonth()+1}月${d.getDate()}日（${weekday}）`;
+  document.getElementById('printDateTitle').textContent = dateStr;
+  document.getElementById('printDateBottom').textContent = dateStr;
+  const now = new Date();
+  document.getElementById('printUpdated').textContent =
+    `更新日時：${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+  // 部屋割テーブル
+  const tbody = document.getElementById('printRoomBody');
+  tbody.innerHTML = '';
+  const floorBreakRooms = new Set(['306','406','506','606']);
+
+  rooms.forEach(room => {
+    const assigned = (asn[room.number]||[]).map(id=>guests.find(g=>g.id===id)).filter(Boolean);
+    const isFloorBreak = floorBreakRooms.has(room.number);
+
+    // 空室でも固定高さで1行出力
+    if (assigned.length === 0) {
+      const tr = document.createElement('tr');
+      if (isFloorBreak) tr.className = 'floor-break';
+      tr.innerHTML =
+        `<td class="room-name">${escHtml(room.number)}</td>`
+        + `<td class="tatami">${escHtml(room.type).replace('畳','')}</td>`
+        + `<td class="guest-name"></td><td class="center"></td>`
+        + `<td class="center"></td><td class="center"></td><td class="center"></td>`
+        + `<td class="center"></td>`
+        + `<td class="center"></td><td class="center"></td>`
+        + `<td class="center"></td><td class="center"></td>`
+        + `<td class="center"></td><td class="center"></td><td class="notes-cell"></td>`;
+      tbody.appendChild(tr);
+    } else {
+      assigned.forEach((g, gi) => {
+        // 日別人数設定があればそちらを優先
+        const dayData = g.dailyMenus && g.dailyMenus[date];
+        const adults = (dayData && dayData.adults != null)
+          ? dayData.adults
+          : (g.adults != null ? g.adults : (g.childA == null ? g.guests||1 : g.adults||0));
+        const childA = (dayData && dayData.childA != null) ? dayData.childA : (g.childA || 0);
+        const childB = (dayData && dayData.childB != null) ? dayData.childB : (g.childB || 0);
+        const tr = document.createElement('tr');
+        const isLast = gi === assigned.length - 1;
+        if (isFloorBreak && isLast) tr.className = 'floor-break';
+
+        // 泊料金セル（請求先「済」なら背景グレー）
+        const billingDone = (g.billing || '') === '済';
+        const chargeClass = 'charge-cell' + (billingDone ? ' billing-done' : '');
+        const chargeContent = billingDone ? '済' : '';
+
+        // 当日のメニューを取得（日別設定優先）
+        const menu = getGuestMenu(g, date);
+        const dtime = menu.dinnerTime === '✖' ? '✖' : (menu.dinnerTime || '');
+        const btime = menu.breakfastTime === '✖' ? '✖' : (menu.breakfastTime || '');
+
+        tr.innerHTML =
+          `<td class="room-name">${gi===0 ? escHtml(room.number) : ''}</td>`
+          + `<td class="tatami">${gi===0 ? escHtml(room.type).replace('畳','') : ''}</td>`
+          + `<td class="guest-name">${escHtml(cleanName(g.name))}</td>`
+          + `<td class="center">${nightLabel(g)}</td>`
+          + `<td class="center">${adults||''}</td>`
+          + `<td class="center">${childA||''}</td>`
+          + `<td class="center">${childB||''}</td>`
+          + `<td class="center">${escHtml(agtAbbr(g.source))}</td>`
+          + `<td class="center">${escHtml(menu.dinner||'')}</td>`
+          + `<td class="center">${escHtml(menu.breakfast||'')}</td>`
+          + `<td class="${chargeClass}">${chargeContent}</td>`
+          + `<td class="tax-cell"></td>`
+          + `<td class="center">${escHtml(dtime)}</td>`
+          + `<td class="center">${escHtml(btime)}</td>`
+          + `<td class="notes-cell">${escHtml(g.notes||'')}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+  });
+
+  // 集計
+  buildSumTable('printDinnerTable',    'dinner',    asn);
+  buildSumTable('printBreakfastTable', 'breakfast', asn);
+
+  window.print();
+}
+
+function buildSumTable(tableId, field, asn) {
+  const date = getCurrentDate();
+
+  const FIXED_MENUS = {
+    dinner:    ['夕あり','会A','会C','ナベA','ナベC','すき','しゃぶ','おまかせ'],
+    breakfast: ['和食','パン','おまかせ'],
+  };
+  const menus = FIXED_MENUS[field] || [];
+
+  const assignedIds = new Set(Object.values(asn).flat());
+  const assignedGuests = [...assignedIds].map(id => guests.find(g=>g.id===id)).filter(Boolean);
+  const unassignedGuests = guests.filter(g =>
+    !assignedIds.has(g.id) && isStayingOnDate(g, date)
+  );
+  const allGuests = [...assignedGuests, ...unassignedGuests];
+
+  const cats = ['大','A','B'];
+  const sum = {};
+  menus.forEach(m => { sum[m] = {大:0, A:0, B:0}; });
+
+  allGuests.forEach(g => {
+    const gm = getGuestMenu(g, date);
+    const menu = (gm[field]||'').trim();
+    if (menu === '✖' || !sum[menu]) return;
+    // 日別人数設定があればそちらを優先
+    const a  = gm.adults != null ? gm.adults : (g.adults != null ? g.adults : (g.childA == null ? g.guests||1 : g.adults||0));
+    const ca = gm.childA != null ? gm.childA : (g.childA || 0);
+    const cb = gm.childB != null ? gm.childB : (g.childB || 0);
+    sum[menu]['大'] += a;
+    sum[menu]['A']  += ca;
+    sum[menu]['B']  += cb;
+  });
+
+  const tbl = document.getElementById(tableId);
+
+  // colgroup：ラベル列 + メニュー列（等幅）+ 合計列
+  const colgroup = `<colgroup>
+    <col class="sc-label">
+    ${menus.map(()=>'<col>').join('')}
+    <col class="sc-total">
+  </colgroup>`;
+
+  // おまかせは小フォントクラス付与
+  const menuThClass = m => 'sc-menu' + (m === 'おまかせ' ? ' small-menu' : '');
+
+  const thead = `<thead><tr>
+    <th class="sc-label"></th>
+    ${menus.map(m=>`<th class="${menuThClass(m)}">${escHtml(m)}</th>`).join('')}
+    <th class="sc-total">計</th>
+  </tr></thead>`;
+
+  let tbody = '<tbody>';
+  let colTotals = menus.map(()=>0);
+  let grandTotal = 0;
+  const catClass = c => (c==='A'||c==='B') ? ' class="cat-'+c+'"' : '';
+  cats.forEach(cat => {
+    const rowVals = menus.map(m => sum[m][cat]);
+    const rowTotal = rowVals.reduce((a,b)=>a+b,0);
+    grandTotal += rowTotal;
+    rowVals.forEach((v,i) => { colTotals[i] += v; });
+    tbody += `<tr>
+      <td class="sc-label"${catClass(cat)}><b>${cat}</b></td>
+      ${rowVals.map(v=>`<td class="center"${catClass(cat)}>${v||''}</td>`).join('')}
+      <td class="sc-total">${rowTotal||''}</td>
+    </tr>`;
+  });
+  tbody += `<tr>
+    <td class="sc-label"><b>計</b></td>
+    ${colTotals.map(v=>`<td class="center sc-total">${v||''}</td>`).join('')}
+    <td class="sc-total"><b>${grandTotal||''}</b></td>
+  </tr>`;
+  tbody += '</tbody>';
+  tbl.innerHTML = colgroup + thead + tbody;
+}
+
+init();
+</script>
+
+
+<!-- メニュー設定モーダル -->
+<div class="modal-overlay hidden" id="menuSettingsModal">
+  <div class="modal" style="max-width:620px">
+    <button class="close-modal" onclick="closeModal('menuSettingsModal')">×</button>
+    <h3>🍽 メニュー・時間設定</h3>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">各カテゴリの選択肢を編集できます。1行1項目で入力してください。</p>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group full-width" style="grid-column:1">
+        <label>🌙 夕食メニュー</label>
+        <textarea id="ms_dinnerMenus" rows="6" style="font-size:0.83rem;resize:vertical"></textarea>
+      </div>
+      <div class="form-group" style="grid-column:2;grid-row:1">
+        <label>🌙 夕食時間</label>
+        <textarea id="ms_dinnerTimes" rows="6" style="font-size:0.83rem;resize:vertical"></textarea>
+      </div>
+      <div class="form-group" style="grid-column:1;grid-row:2">
+        <label>☀️ 朝食メニュー</label>
+        <textarea id="ms_breakfastMenus" rows="5" style="font-size:0.83rem;resize:vertical"></textarea>
+      </div>
+      <div class="form-group" style="grid-column:2;grid-row:2">
+        <label>☀️ 朝食時間</label>
+        <textarea id="ms_breakfastTimes" rows="5" style="font-size:0.83rem;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('menuSettingsModal')">キャンセル</button>
+      <button class="btn-primary" onclick="saveMenuSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 部屋設定モーダル -->
+<div class="modal-overlay hidden" id="roomSettingsModal">
+  <div class="modal" style="max-width:560px">
+    <button class="close-modal" onclick="closeModal('roomSettingsModal')">×</button>
+    <h3>🚪 部屋設定</h3>
+    <div id="roomSettingsList" style="margin-bottom:12px;max-height:320px;overflow-y:auto"></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:14px;border:1px solid var(--border)">
+      <div style="font-size:0.8rem;font-weight:600;margin-bottom:10px;color:var(--accent)" id="roomFormTitle">新規追加</div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="form-group">
+          <label>部屋番号 *</label>
+          <input type="text" id="rs_number" placeholder="例: 101">
+        </div>
+        <div class="form-group">
+          <label>部屋タイプ</label>
+          <select id="rs_type">
+            <option>イス席</option><option>51畳</option><option>10+2畳</option>
+            <option>10+5畳</option><option>10畳</option><option>12+5畳</option>
+            <option>12+5.5畳</option><option>12.5畳</option><option>10+6畳</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>定員</label>
+          <input type="number" id="rs_capacity" min="1" value="2">
+        </div>
+      </div>
+      <div class="modal-footer" style="margin-top:8px;padding-top:8px">
+        <button class="btn-secondary" onclick="resetRoomSettingsForm()">クリア</button>
+        <button class="btn-primary" id="rs_saveBtn" onclick="saveRoomFromSettings()">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 印刷エリア ===== -->
+<div id="printArea">
+  <!-- 上部：部屋割表タイトル＋日付 -->
+  <div class="print-date-line">
+    <div class="print-title">部屋割表</div>
+    <div class="print-date" id="printDateTitle"></div>
+  </div>
+  <div class="print-updated" id="printUpdated"></div>
+
+  <table class="print-table" id="printRoomTable">
+    <colgroup>
+      <col class="c-room">
+      <col class="c-tatami">
+      <col class="c-name">
+      <col class="c-nights">
+      <col class="c-adult">
+      <col class="c-chA">
+      <col class="c-chB">
+      <col class="c-agt">
+      <col class="c-dinner">
+      <col class="c-bfast">
+      <col class="c-charge">
+      <col class="c-tax">
+      <col class="c-dtime">
+      <col class="c-btime">
+      <col class="c-notes">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>室名</th><th>畳数</th><th>氏名</th>
+        <th>泊数</th><th>大</th><th>A</th><th>B</th><th>AGT</th>
+        <th>夕食</th><th>朝食</th><th>泊料金</th><th>宿泊税</th>
+        <th>夕食時間</th><th>朝食時間</th><th>備考</th>
+      </tr>
+    </thead>
+    <tbody id="printRoomBody"></tbody>
+  </table>
+
+  <!-- 中間：日付ライン（部屋割表直下・集計直上） -->
+  <div class="print-date-line" style="margin-bottom:2mm">
+    <div></div>
+    <div class="print-date" id="printDateBottom"></div>
+  </div>
+
+  <div class="print-sum-row">
+    <div class="print-sum-dinner-wrap">
+      <div class="print-sum-section">【夕食】</div>
+      <table class="print-sumtable" id="printDinnerTable"></table>
+    </div>
+    <div class="print-sum-bfast-wrap">
+      <div class="print-sum-section">【朝食】</div>
+      <table class="print-sumtable" id="printBreakfastTable"></table>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
