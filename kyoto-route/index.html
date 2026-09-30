@@ -143,6 +143,28 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
 #map{height:320px;border-radius:var(--radius);border:1px solid var(--line);margin:12px 0;background:var(--surface-2)}
 .map-off{display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:16px}
 #view-spots{padding-bottom:72px}
+.modebar{display:grid;gap:10px}
+.mode-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mode-k{font-size:13px;color:var(--muted);min-width:2.5em}
+.mode-row .chips{margin:0}
+.rain-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 14px;font-size:15px;text-align:left}
+.rain-toggle .sw{flex:0 0 44px;height:26px;border-radius:999px;background:var(--line);position:relative;transition:background .15s}
+.rain-toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s}
+.rain-toggle[aria-pressed="true"]{border-color:var(--ai);background:var(--ai-soft)}
+.rain-toggle[aria-pressed="true"] .sw{background:var(--ai)}
+.rain-toggle[aria-pressed="true"] .sw::after{left:21px}
+.rain-toggle small{display:block;font-size:12px;color:var(--muted)}
+.mode-note{font-size:12px;color:var(--muted);margin:0}
+.badge.rain2{background:var(--ai-soft);color:var(--ai)}
+.badge.rain0{background:#f6dcda;color:#a0322a}
+.badge.peak{background:var(--warn-soft);color:var(--warn)}
+.card.dim{opacity:.6}
+.season-line{font-size:13px;background:var(--ok-soft);color:var(--ink);border-radius:8px;padding:5px 10px;margin:4px 0 6px;display:block}
+.season-line b{color:var(--ok)}
+.rain-line{font-size:13px;background:var(--ai-soft);border-radius:8px;padding:5px 10px;margin:4px 0;display:block}
+.preset.rainy{border-color:var(--ai)}
+.preset.rainy h3{color:var(--ai)}
+.settings select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface)}
 .empty{text-align:center;color:var(--muted);padding:40px 16px}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;font-size:14px}
@@ -207,6 +229,12 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
     </div>
     <div class="panel" id="guestMsg" hidden></div>
 
+    <div class="panel modebar">
+      <div class="mode-row"><span class="mode-k">季節</span><div class="chips" id="seasonChips"></div></div>
+      <button class="rain-toggle" id="rainBtn" aria-pressed="false"><span>☔ 雨の日モード<small>屋内中心のスポットを優先し、歩く距離を短くします</small></span><span class="sw"></span></button>
+      <p class="mode-note" id="modeNote"></p>
+    </div>
+
     <h2 class="sec-title">おすすめコース <small>タップで一括選択</small></h2>
     <div class="presets" id="presets"></div>
 
@@ -229,6 +257,8 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
       <div class="panel settings no-print">
         <label>出発時刻 <input type="time" id="startTime" value="09:00" step="300"></label>
         <label><input type="checkbox" id="returnHotel" checked> 最後に加茂川館へ戻る</label>
+        <label>季節 <select id="routeSeason"></select></label>
+        <label><input type="checkbox" id="routeRain"> ☔ 雨の日モード</label>
       </div>
       <div class="panel">
         <div class="totals" id="totals"></div>
@@ -269,6 +299,12 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
         <li>タクシー、一部のコミュニティバス</li>
       </ul>
       <div class="warnbox"><b>ご注意：</b>地下鉄東西線の電車の一部は、御陵駅から京阪線に入る<b>「びわ湖浜大津行き」</b>です。山科・醍醐方面へは<b>「六地蔵行き」</b>に乗ってください（三条京阪から蹴上・御陵まではどちらでもOK）。</div>
+      <h3>季節の見どころ・雨の日モード</h3>
+      <ul>
+        <li>「季節」を切り替えると、その季節の見どころが各スポットに表示されます（今日の日付から自動で選ばれています）。</li>
+        <li>桜や紅葉で混みやすい時期のスポットは、なるべく朝の早い時間に回るようルートを組みます。冬は閉門が早いお寺の時間にも対応します。</li>
+        <li>「雨の日モード」では、屋内で楽しめるスポットを上に表示し、歩く距離が短くなるよう地下鉄を優先します。山道など雨の日に不向きな場所には注意が出ます。</li>
+      </ul>
       <h3>費用の表示について</h3>
       <p>一日券で乗れる交通機関は<b>0円</b>で計算しています。拝観料・食事代は目安です。参考として、一日券がなかった場合の通常運賃も表示しています。</p>
     </div>
@@ -478,8 +514,103 @@ const PRESETS = [
   { name: '方丈記と親鸞のふるさと・日野', desc: '国宝阿弥陀堂の法界寺、親鸞誕生の地、鴨長明の庵跡へ。',
     ids: ['paseo', 'ichigonji', 'hokaiji', 'tanjoin', 'hojoishi'] },
   { name: '戦国と忠臣蔵の山科', desc: '蓮如の山科本願寺跡、大石内蔵助の閑居跡、光秀最期の地。',
-    ids: ['honganji-dorui', 'oishi-jinja', 'iwayaji', 'lacto', 'akechiyabu'] }
+    ids: ['honganji-dorui', 'oishi-jinja', 'iwayaji', 'lacto', 'akechiyabu'] },
+  { name: '雨の日コース：屋内で味わう寺宝', desc: '疏水記念館の展示、随心院の襖絵、醍醐寺の霊宝館など屋内中心。駅近で傘の出番は少なめ。',
+    ids: ['sosui-museum', 'zuishinin', 'paseo', 'daigoji'], rain: true }
 ];
+
+const SEASONS = {
+  spring: { label: '春', icon: '🌸', months: '3〜5月' },
+  summer: { label: '夏', icon: '🌿', months: '6〜8月' },
+  autumn: { label: '秋', icon: '🍁', months: '9〜11月' },
+  winter: { label: '冬', icon: '❄️', months: '12〜2月' }
+};
+function seasonOf(date) { const m = date.getMonth() + 1; return m >= 3 && m <= 5 ? 'spring' : m >= 6 && m <= 8 ? 'summer' : m >= 9 && m <= 11 ? 'autumn' : 'winter'; }
+const RAIN_LABEL = { 2: '☔ 雨でも快適', 1: '傘があれば大丈夫', 0: '雨の日は不向き' };
+
+/* 季節の見どころ・雨の日対応（rain: 2=屋内中心で雨でも快適 1=傘があれば大丈夫 0=雨の日は不向き）
+   peak: 混雑しやすい季節 / winter: 冬期（12〜2月）の開門時間 */
+const SPOT_EXTRA = {
+  'keage-incline': { rain: 1, peak: ['spring'], seasons: {
+    spring: '線路跡に約90本の桜が並ぶ桜のトンネル。人気が高いので朝8時台が狙い目です。',
+    summer: '青もみじと疏水の水音が涼やか。',
+    autumn: '南禅寺方面へ続く木々の紅葉。',
+    winter: '人が少なく、レンガ造りの「ねじりまんぽ」をじっくり観察できます。' } },
+  'sosui-museum': { rain: 2, rainNote: '展示は屋内。雨の日の最初の一か所にぴったりです。', seasons: {
+    spring: '記念館前の疏水を「びわ湖疏水船」が行き交う季節です（運航日は要確認）。',
+    summer: '冷房の効いた館内で、暑さを避けて疏水の歴史を学べます。',
+    autumn: '疏水沿いの紅葉と合わせて。',
+    winter: '屋外が寒い日も、館内でゆっくり。' } },
+  'kurumaishi': { rain: 1, rainNote: '坂道は濡れると滑りやすいのでご注意ください。', seasons: {
+    spring: '峠道歩きに最適な気候です。',
+    summer: '日差しが強いので、午前中の早い時間がおすすめ。',
+    autumn: '峠越しに色づく東山の山並み。',
+    winter: '空気が澄み、旧街道の風情が際立ちます。' } },
+  'tenji-ryo': { rain: 1, rainNote: '玉砂利の参道は雨でも歩けますが、足元にご注意を。', seasons: {
+    spring: '参道の木々が芽吹く、清々しい季節。',
+    summer: '木々に覆われた参道は、夏でもひんやり。',
+    autumn: '参道の木々が色づき、玉砂利に落ち葉が映えます。',
+    winter: '冬枯れの参道に、凛とした静けさが満ちます。' } },
+  'sosui-yamashina': { rain: 1, peak: ['spring'], seasons: {
+    spring: '疏水沿いに桜と菜の花が続く、山科随一の花の道（週末は地元の方でにぎわいます）。',
+    summer: '水面を渡る風と木陰が心地よい散歩道。',
+    autumn: '桜並木の紅葉と、水面に映る色づき。',
+    winter: '葉が落ちて見通しがよく、疏水の石積みやトンネルの入口がよく見えます。' } },
+  'bishamondo': { rain: 2, rainNote: '宸殿など建物内の拝観が中心。雨に濡れた石段や苔にも風情があります。', peak: ['autumn'],
+    winter: { close: '16:30', lastEntry: '16:00' }, seasons: {
+    spring: '宸殿前の枝垂れ桜「般若桜」が見事です。',
+    summer: '勅使門前の石段を覆う青もみじ。',
+    autumn: '勅使門前の石段を埋め尽くす「散りもみじ」は必見。11月中旬〜下旬は混雑します。',
+    winter: '訪れる人もまばらで、襖絵をひとり占めできることも。' } },
+  'gangyoji': { rain: 1, seasons: {} },
+  'honganji-dorui': { rain: 1, seasons: {
+    summer: '草木が茂り、土塁の形はやや見えにくくなります。',
+    winter: '草が枯れて、土塁の高さや形が最もよく分かる季節。史跡好きには冬がおすすめです。' } },
+  'oishi-jinja': { rain: 1, seasons: {
+    spring: '内蔵助ゆかりの枝垂れ桜「大石桜」が咲きます。',
+    winter: '12月14日は「山科義士まつり」。義士行列が山科の街を練り歩きます。' } },
+  'iwayaji': { rain: 1, rainNote: '木像堂などは屋内で拝観できます。', seasons: {
+    winter: '討ち入りの12月は、内蔵助の山科での日々に思いを馳せるのにふさわしい季節です。' } },
+  'kanshuji': { rain: 1, rainNote: '庭園が中心ですが、雨にけむる氷室池も趣があります。', seasons: {
+    spring: '氷室池のほとりに桜、続いて藤やカキツバタが咲きます。',
+    summer: '初夏は花菖蒲、夏は氷室池を彩る睡蓮やハスが見頃です。',
+    autumn: '池に映る紅葉。',
+    winter: '雪の日の氷室池と勧修寺型灯籠は格別です。' } },
+  'zuishinin': { rain: 2, rainNote: '本堂・書院の襖絵など、屋内の見どころが充実しています。', seasons: {
+    spring: '3月は「はねず」色の梅が咲く小野梅園が見頃。3月最終日曜は「はねず踊り」。',
+    summer: '青もみじ越しに眺める書院の庭。',
+    autumn: '境内の紅葉と、静かな書院。',
+    winter: '人の少ない冬は、襖絵「極彩色梅匂小町絵図」をじっくり鑑賞できます。' } },
+  'daigoji': { rain: 1, rainNote: '三宝院の建物内や霊宝館は屋内ですが、伽藍は広いので傘が必要です。', peak: ['spring', 'autumn'],
+    winter: { close: '16:30', lastEntry: '16:00' }, seasons: {
+    spring: '「花の醍醐」。約700本の桜が咲き、4月第2日曜は豊太閤花見行列。大変混雑するので開門直後がおすすめです。',
+    summer: '青もみじに囲まれた五重塔と、弁天堂の池の緑。',
+    autumn: '弁天堂周辺の紅葉は京都屈指。11月下旬は混雑するため早い時間に。',
+    winter: '参拝者が少なく、五重塔や金堂を静かに拝観できる穴場の季節です。' } },
+  'kamidaigo': { rain: 0, rainNote: '山道は雨で滑りやすく危険です。雨の日はおすすめしません。',
+    winter: { lastEntry: '14:00' }, seasons: {
+    spring: '山道の新緑と山桜。登るのに最適な季節です。',
+    summer: '暑さと虫に注意。飲み物は多めにお持ちください。',
+    autumn: '山上の紅葉と、澄んだ空気の中の国宝建築。',
+    winter: '凍結することがあります。入山受付も早まるので午前中に。' } },
+  'nagao-tenmangu': { rain: 1, seasons: { spring: '石段の参道に桜が咲きます。' } },
+  'ichigonji': { rain: 1, seasons: { autumn: '高台の境内から、色づく醍醐の山々を望めます。' } },
+  'hokaiji': { rain: 2, rainNote: '国宝の阿弥陀堂の中で、ゆっくり拝観できます。',
+    winter: { close: '16:00', lastEntry: '15:30' }, seasons: {
+    winter: '1月14日の「裸踊り」は、五穀豊穣を祈る日野の奇祭です。' } },
+  'tanjoin': { rain: 1, seasons: {} },
+  'hojoishi': { rain: 0, rainNote: '山道は雨で滑りやすく、おすすめしません。', seasons: {
+    summer: '蒸し暑く虫も多い季節。長袖・虫よけを。',
+    autumn: '落ち葉を踏みしめる山道は『方丈記』の世界そのもの。',
+    winter: '葉が落ち、長明が眺めたであろう日野の里を見下ろせます。' } },
+  'akechiyabu': { rain: 0, rainNote: '竹藪へ続く道はぬかるみやすく、雨の日は不向きです。', seasons: {} },
+  'daizenji': { rain: 1, seasons: {
+    summer: '8月22・23日は「六地蔵めぐり」。京の六つの地蔵を巡る夏の風物詩でにぎわいます。' } },
+  'ugetsu': { rain: 2, rainNote: '屋内でゆっくり食事ができます。', peak: ['spring'], seasons: {
+    spring: '桜の季節は醍醐寺とともに混み合います。' } },
+  'paseo': { rain: 2, rainNote: '駅直結なので傘いらずです。', seasons: {} },
+  'lacto': { rain: 2, rainNote: '駅直結なので傘いらずです。', seasons: {} }
+};
 
 /* =========================================================
    カスタムデータ（ホテル側で追加・編集）
@@ -507,7 +638,7 @@ function saveCustom() { lsSet(LS_KEY, JSON.stringify(custom)); rebuildSpots(); r
 
 let SPOTS = [], SPOT = {};
 function rebuildSpots() {
-  const list = BUILTIN_SPOTS.map(s => ({ ...s, ...(custom.overrides[s.id] || {}), builtin: true }))
+  const list = BUILTIN_SPOTS.map(s => ({ ...s, ...(SPOT_EXTRA[s.id] || {}), ...(custom.overrides[s.id] || {}), builtin: true }))
     .concat(custom.added.map(s => ({ ...s, custom: true })));
   SPOT = Object.fromEntries(list.map(s => [s.id, s]));
   list.forEach(s => { if (!s.access || !s.access.length) s.access = autoAccess(s); });
@@ -540,6 +671,15 @@ function yen(n) { return n.toLocaleString('ja-JP') + '円'; }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function subwayFare(km) { return km <= 3 ? 220 : km <= 7 ? 260 : km <= 11 ? 290 : km <= 15 ? 330 : 360; }
 
+// 季節に応じた開門時間（冬期は winter の値を優先）
+function hoursFor(s) {
+  const w = state.season === 'winter' && s.winter ? s.winter : {};
+  return { open: w.open || s.open, close: w.close || s.close, lastEntry: w.lastEntry || s.lastEntry };
+}
+function isPeak(s) { return Array.isArray(s.peak) && s.peak.includes(state.season); }
+function rainLevel(s) { return s.rain == null ? 1 : +s.rain; }
+function seasonText(s) { return (s.seasons && s.seasons[state.season]) || ''; }
+
 // 山道など「別スポット経由」の場所は、経由地の位置＋追加徒歩で扱う
 function base(p) {
   if (p.gateway && SPOT[p.gateway.id]) return { pt: SPOT[p.gateway.id], extra: p.gateway.walk || 0 };
@@ -561,7 +701,11 @@ function computeLeg(a, b) {
     const total = ea.walk + WAIT_MIN + ride + eb.walk;
     if (!best || total < best.min) best = { min: total, ea, eb, ride, fare: subwayFare(Math.abs(s2.km - s1.km)) };
   }
-  if (!best || walk <= 15 || walk <= best.min) {
+  // 雨の日は、地下鉄を使った方が歩く距離が短くなるなら地下鉄を優先
+  const walkOk = !best ? true : state.rain
+    ? (walk <= 8 || !((best.ea.walk + best.eb.walk) < walk - 3 && best.min <= walk + 10))
+    : (walk <= 15 || walk <= best.min);
+  if (walkOk) {
     return { type: 'walk', min: Math.max(walk, 1), fareNormal: 0, from: a, to: b };
   }
   return { type: 'train', min: best.min, fareNormal: best.fare, from: a, to: b,
@@ -577,10 +721,12 @@ function planRoute(spots, startMin, ret) {
     for (const k of ord) {
       t += M[cur][k].min;
       const s = nodes[k];
-      const o = toMin(s.open);
+      const h = hoursFor(s);
+      const o = toMin(h.open);
       if (o != null && t < o) { wait += o - t; t = o; }
-      const le = toMin(s.lastEntry || s.close);
+      const le = toMin(h.lastEntry || h.close);
       if (le != null && t > le) pen += 600 + (t - le) * 10;
+      if (isPeak(s) && !s.meal) pen += (t - startMin) * 0.4;   // 混雑期のスポットはなるべく早い時間に
       if (s.meal) { if (t < 660) pen += (660 - t) * 1.5; else if (t > 840) pen += (t - 840) * 1.5; }
       t += s.stay || 30; cur = k;
     }
@@ -617,34 +763,43 @@ function planRoute(spots, startMin, ret) {
     }
   }
   // 詳細タイムライン
-  const items = []; let t = startMin, cur = 0, fees = 0, food = 0, fareSaved = 0;
+  const items = []; let t = startMin, cur = 0, fees = 0, food = 0, fareSaved = 0, walkTotal = 0;
+  const walkOf = leg => leg.type === 'walk' ? leg.min : leg.walk1 + leg.walk2;
   items.push({ kind: 'start', node: HOTEL, time: t });
   best.forEach((k, n) => {
     const leg = M[cur][k]; items.push({ kind: 'leg', leg, depart: t });
-    t += leg.min; fareSaved += leg.fareNormal;
-    const s = nodes[k]; const arrive = t; let wait = 0;
-    const o = toMin(s.open); if (o != null && t < o) { wait = o - t; t = o; }
-    const le = toMin(s.lastEntry || s.close);
+    t += leg.min; fareSaved += leg.fareNormal; walkTotal += walkOf(leg);
+    const s = nodes[k]; const arrive = t; let wait = 0; const h = hoursFor(s);
+    const o = toMin(h.open); if (o != null && t < o) { wait = o - t; t = o; }
+    const le = toMin(h.lastEntry || h.close);
     let warn = '';
-    if (le != null && t > le) warn = `受付終了（${s.lastEntry || s.close}）に間に合わない可能性があります`;
+    if (le != null && t > le) warn = `受付終了（${h.lastEntry || h.close}）に間に合わない可能性があります`;
     items.push({ kind: 'spot', node: s, no: n + 1, arrive, wait, start: t, depart: t + (s.stay || 30), warn });
     if (s.cat === 'food') food += s.fee || 0; else fees += s.fee || 0;
     t += s.stay || 30; cur = k;
   });
   if (ret) {
     const leg = M[cur][0]; items.push({ kind: 'leg', leg, depart: t });
-    t += leg.min; fareSaved += leg.fareNormal;
+    t += leg.min; fareSaved += leg.fareNormal; walkTotal += walkOf(leg);
     items.push({ kind: 'end', node: HOTEL, time: t });
   }
-  return { items, fees, food, fareSaved, startMin, endMin: t, order: best.map(k => nodes[k].id) };
+  return { items, fees, food, fareSaved, walkTotal, startMin, endMin: t, order: best.map(k => nodes[k].id) };
 }
 
 /* =========================================================
    画面
    ========================================================= */
-const state = { selected: [], area: 'all', cat: 'all', tab: 'spots', start: '09:00', ret: true, route: null };
-try { const s = JSON.parse(lsGet(LS_STATE) || '{}'); if (Array.isArray(s.selected)) state.selected = s.selected; if (s.start) state.start = s.start; if (typeof s.ret === 'boolean') state.ret = s.ret; } catch (e) {}
-function saveState() { lsSet(LS_STATE, JSON.stringify({ selected: state.selected, start: state.start, ret: state.ret })); }
+const state = { selected: [], area: 'all', cat: 'all', tab: 'spots', start: '09:00', ret: true, route: null, season: seasonOf(new Date()), rain: false };
+try {
+  const s = JSON.parse(lsGet(LS_STATE) || '{}');
+  if (Array.isArray(s.selected)) state.selected = s.selected;
+  if (s.start) state.start = s.start;
+  if (typeof s.ret === 'boolean') state.ret = s.ret;
+  if (typeof s.rain === 'boolean') state.rain = s.rain;
+  // 季節は手動で選んだ当日のみ保持し、日をまたいだら今日の季節に戻す
+  if (SEASONS[s.season] && s.seasonDay === new Date().toDateString()) state.season = s.season;
+} catch (e) {}
+function saveState() { lsSet(LS_STATE, JSON.stringify({ selected: state.selected, start: state.start, ret: state.ret, rain: state.rain, season: state.season, seasonDay: new Date().toDateString() })); }
 
 const $ = sel => document.querySelector(sel);
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2000); }
@@ -665,18 +820,32 @@ function renderHeader() {
 }
 
 function renderPresets() {
-  $('#presets').innerHTML = PRESETS.map((p, i) => {
+  const order = PRESETS.map((p, i) => i).sort((a, b) => state.rain ? (PRESETS[b].rain ? 1 : 0) - (PRESETS[a].rain ? 1 : 0) : 0);
+  $('#presets').innerHTML = order.map(i => {
+    const p = PRESETS[i];
     const ok = p.ids.filter(id => SPOT[id] && !custom.hidden.includes(id));
     if (!ok.length) return '';
-    return `<button class="preset" data-preset="${i}"><h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p><p>${ok.length}か所</p></button>`;
+    return `<button class="preset ${p.rain ? 'rainy' : ''}" data-preset="${i}"><h3>${p.rain ? '☔ ' : ''}${esc(p.name)}</h3><p>${esc(p.desc)}</p><p>${ok.length}か所</p></button>`;
   }).join('');
 }
 
 function renderChips() {
   const a = [['all', 'すべて'], ...Object.entries(AREAS)];
   $('#areaChips').innerHTML = a.map(([k, v]) => `<button class="chip" data-area="${k}" aria-pressed="${state.area === k}">${esc(v)}</button>`).join('');
-  const c = [['all', 'すべて'], ...Object.entries(CATS)];
+  const c = [['all', 'すべて'], ['season', `${SEASONS[state.season].icon} ${SEASONS[state.season].label}の見どころ`], ...Object.entries(CATS)];
   $('#catChips').innerHTML = c.map(([k, v]) => `<button class="chip" data-cat="${k}" aria-pressed="${state.cat === k}">${esc(v)}</button>`).join('');
+}
+
+function renderMode() {
+  const today = seasonOf(new Date());
+  $('#seasonChips').innerHTML = Object.entries(SEASONS).map(([k, v]) =>
+    `<button class="chip" data-season="${k}" aria-pressed="${state.season === k}">${v.icon} ${v.label}${k === today ? '（今）' : ''}</button>`).join('');
+  $('#rainBtn').setAttribute('aria-pressed', state.rain);
+  const n = visibleSpots().filter(s => seasonText(s)).length;
+  const sv = SEASONS[state.season];
+  $('#modeNote').textContent = `${sv.label}（${sv.months}）の見どころがあるスポット：${n}件` + (state.rain ? '　／　雨の日モード：屋内で楽しめる順に並んでいます' : '');
+  $('#routeSeason').innerHTML = Object.entries(SEASONS).map(([k, v]) => `<option value="${k}" ${state.season === k ? 'selected' : ''}>${v.icon} ${v.label}</option>`).join('');
+  $('#routeRain').checked = state.rain;
 }
 
 function spotAccessText(s) {
@@ -685,32 +854,46 @@ function spotAccessText(s) {
 }
 
 function renderCards() {
-  const list = visibleSpots().filter(s => (state.area === 'all' || s.area === state.area) && (state.cat === 'all' || s.cat === state.cat));
+  let list = visibleSpots().filter(s => (state.area === 'all' || s.area === state.area) &&
+    (state.cat === 'all' || (state.cat === 'season' ? !!seasonText(s) : s.cat === state.cat)));
+  if (state.rain) list = list.map((s, i) => [s, i]).sort((a, b) => rainLevel(b[0]) - rainLevel(a[0]) || a[1] - b[1]).map(x => x[0]);
   $('#spotCount').textContent = `${list.length}件`;
   $('#cards').innerHTML = list.map(s => {
     const sel = state.selected.includes(s.id);
-    const hours = s.open ? `${s.open}〜${s.close || ''}` : '';
+    const h = hoursFor(s);
+    const hours = h.open ? `${h.open}〜${h.close || ''}` : '';
+    const rl = rainLevel(s), st = seasonText(s), sv = SEASONS[state.season];
+    const rainBadge = rl === 2 ? `<span class="badge rain2">${RAIN_LABEL[2]}</span>` : (state.rain ? `<span class="badge ${rl === 0 ? 'rain0' : ''}">${RAIN_LABEL[rl]}</span>` : '');
     const feeLabel = s.cat === 'food' ? `食事目安 ${yen(s.fee || 0)}` : (s.fee ? `拝観 ${yen(s.fee)}` : '拝観無料');
-    return `<article class="card ${sel ? 'sel' : ''}" data-id="${esc(s.id)}">
+    return `<article class="card ${sel ? 'sel' : ''} ${state.rain && rl === 0 ? 'dim' : ''}" data-id="${esc(s.id)}">
       <button class="card-head" data-toggle="${esc(s.id)}" aria-pressed="${sel}">
         <span class="check">✓</span>
         <span style="flex:1;min-width:0">
           <h3>${esc(s.name)}</h3>
-          <span class="badges"><span class="badge ${s.cat}">${esc(CATS[s.cat] || '')}</span><span class="badge">${esc(AREAS[s.area] || '')}</span>${s.custom ? '<span class="badge custom">追加</span>' : ''}</span>
+          <span class="badges"><span class="badge ${s.cat}">${esc(CATS[s.cat] || '')}</span><span class="badge">${esc(AREAS[s.area] || '')}</span>${rainBadge}${isPeak(s) ? `<span class="badge peak">${sv.label}は混雑</span>` : ''}${s.custom ? '<span class="badge custom">追加</span>' : ''}</span>
           <p class="desc">${esc(s.desc)}</p>
+          ${st ? `<span class="season-line"><b>${sv.icon} ${sv.label}</b>　${esc(st)}</span>` : ''}
+          ${state.rain && s.rainNote ? `<span class="rain-line">☔ ${esc(s.rainNote)}</span>` : ''}
           <span class="meta"><span>${esc(feeLabel)}</span><span>滞在 約${s.stay || 30}分</span>${hours ? `<span>${esc(hours)}</span>` : ''}<span>静けさ <span class="quiet">${quietDots(s.crowd)}</span></span></span>
         </span>
       </button>
-      ${(s.history || s.tips || s.closed || s.feeNote) ? `<details class="more"><summary>歴史・見どころ・アクセス</summary><div class="body">
+      ${(s.history || s.tips || s.closed || s.feeNote || s.seasons) ? `<details class="more"><summary>歴史・見どころ・アクセス</summary><div class="body">
         ${s.history ? `<p>${esc(s.history)}</p>` : ''}
         <p class="meta"><span>🚇 ${esc(spotAccessText(s))}</span>${s.closed ? `<span>休：${esc(s.closed)}</span>` : ''}</p>
         ${s.feeNote ? `<p class="meta"><span>※${esc(s.feeNote)}</span></p>` : ''}
         ${s.tips ? `<div class="tip">💡 ${esc(s.tips)}</div>` : ''}
+        ${seasonTable(s)}
         <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図で見る</a></div>
       </div></details>` : ''}
     </article>`;
   }).join('') || '<p class="empty">条件に合うスポットがありません。</p>';
   updateAction();
+}
+
+function seasonTable(s) {
+  const rows = Object.entries(SEASONS).filter(([k]) => s.seasons && s.seasons[k] && k !== state.season)
+    .map(([k, v]) => `<li>${v.icon} <b>${v.label}</b>　${esc(s.seasons[k])}</li>`).join('');
+  return rows ? `<div class="tip"><b>ほかの季節の見どころ</b><ul style="margin:4px 0 0;padding-left:1em;list-style:none">${rows}</ul></div>` : '';
 }
 
 function updateAction() {
@@ -734,7 +917,7 @@ function buildRoute() {
   const spots = state.selected.map(id => SPOT[id]).filter(Boolean);
   if (!spots.length) { state.route = null; renderRoute(); return; }
   state.route = planRoute(spots, toMin(state.start) ?? 540, state.ret);
-  try { history.replaceState(null, '', '#s=' + state.selected.map(encodeURIComponent).join(',') + '&t=' + state.start.replace(':', '') + '&r=' + (state.ret ? 1 : 0)); } catch (e) {}
+  try { history.replaceState(null, '', '#s=' + state.selected.map(encodeURIComponent).join(',') + '&t=' + state.start.replace(':', '') + '&r=' + (state.ret ? 1 : 0) + '&k=' + state.season + '&w=' + (state.rain ? 1 : 0)); } catch (e) {}
   renderRoute();
 }
 
@@ -770,7 +953,8 @@ function renderRoute() {
     <div class="tot"><div class="k">食事（目安）</div><div class="v">${yen(r.food)}</div></div>
     <div class="tot"><div class="k">所要時間</div><div class="v">${fmtDur(r.endMin - r.startMin)}</div><div class="k">${fmtTime(r.startMin)}〜${fmtTime(r.endMin)}</div></div>
     <div class="tot grand"><div class="k">おひとりさま 合計の目安</div><div class="v">${yen(total)}</div></div>`;
-  $('#saveNote').textContent = r.fareSaved ? `一日券のおかげで、通常なら約${yen(r.fareSaved)}かかる電車賃が0円になっています。` : '今回のルートは徒歩のみです（一日券はバス移動などにもご利用いただけます）。';
+  $('#saveNote').textContent = (r.fareSaved ? `一日券のおかげで、通常なら約${yen(r.fareSaved)}かかる電車賃が0円になっています。` : '今回のルートは徒歩のみです（一日券はバス移動などにもご利用いただけます）。') +
+    `　歩く時間の合計：約${fmtDur(r.walkTotal)}` + (state.rain ? '（雨の日モード：地下鉄を優先しています）' : '');
   $('#warns').innerHTML = planWarns(r).map(w => `<div class="warnbox">⚠ ${esc(w)}</div>`).join('');
   $('#timeline').innerHTML = r.items.map(it => {
     if (it.kind === 'leg') return legHtml(it.leg, it.depart);
@@ -784,6 +968,8 @@ function renderRoute() {
       <div class="sub">滞在 約${s.stay || 30}分（〜${fmtTime(it.depart)}）${it.wait ? `／開門まで${it.wait}分待ち` : ''}</div>
       <div class="fee">${esc(feeTxt)}${s.feeNote ? `<small style="color:var(--muted)">（${esc(s.feeNote)}）</small>` : ''}</div>
       ${it.warn ? `<div class="warnbox">⚠ ${esc(it.warn)}</div>` : ''}
+      ${seasonText(s) ? `<span class="season-line"><b>${SEASONS[state.season].icon} ${SEASONS[state.season].label}</b>　${esc(seasonText(s))}</span>` : ''}
+      ${state.rain && s.rainNote ? `<span class="rain-line">☔ ${esc(s.rainNote)}</span>` : ''}
       ${s.tips ? `<div class="sub">💡 ${esc(s.tips)}</div>` : ''}
       <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図</a></div>
     </div></li>`;
@@ -792,7 +978,13 @@ function renderRoute() {
 }
 function planWarns(r) {
   const w = [];
-  r.items.forEach(it => { if (it.kind === 'spot' && it.node.meal && (it.start < 630 || it.start > 870)) w.push(`${it.node.name}：お食事の時間帯から外れています（${fmtTime(it.start)}着）`); });
+  r.items.forEach(it => {
+    if (it.kind !== 'spot') return;
+    const s = it.node;
+    if (s.meal && (it.start < 630 || it.start > 870)) w.push(`${s.name}：お食事の時間帯から外れています（${fmtTime(it.start)}着）`);
+    if (state.rain && rainLevel(s) === 0) w.push(`${s.name}：${s.rainNote || '雨の日は不向きな場所です。'}`);
+    if (isPeak(s) && !s.meal && it.start >= 11 * 60) w.push(`${s.name}：${SEASONS[state.season].label}は混雑しやすい時期です。${fmtTime(it.start)}着の予定なので、先に回すか出発を早めるのがおすすめです。`);
+  });
   if (r.endMin > 18 * 60) w.push(`終了予定が${fmtTime(r.endMin)}と遅めです。スポットを減らすか、出発を早めることをおすすめします。`);
   return w;
 }
@@ -865,15 +1057,16 @@ function setTab(tab) {
   if (tab === 'route' && state.route) setTimeout(() => routeMap && routeMap.invalidateSize(), 50);
 }
 
-function renderAll() { renderHeader(); renderPresets(); renderChips(); renderCards(); if (state.route) buildRoute(); }
+function renderAll() { renderHeader(); renderMode(); renderPresets(); renderChips(); renderCards(); if (state.route) buildRoute(); }
 
 /* =========================================================
    イベント
    ========================================================= */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-toggle],[data-area],[data-cat],[data-preset],[data-tab],[data-go]');
+  const t = e.target.closest('[data-toggle],[data-area],[data-cat],[data-preset],[data-tab],[data-go],[data-season]');
   if (!t) return;
   if (t.dataset.toggle) toggleSpot(t.dataset.toggle);
+  else if (t.dataset.season) setMode({ season: t.dataset.season });
   else if (t.dataset.area) { state.area = t.dataset.area; renderChips(); renderCards(); }
   else if (t.dataset.cat) { state.cat = t.dataset.cat; renderChips(); renderCards(); }
   else if (t.dataset.preset) {
@@ -886,6 +1079,14 @@ document.addEventListener('click', e => {
   else if (t.dataset.go) setTab(t.dataset.go);
 });
 $('#buildBtn').addEventListener('click', () => { buildRoute(); setTab('route'); });
+function setMode(m) {
+  Object.assign(state, m); saveState();
+  renderMode(); renderPresets(); renderChips(); renderCards();
+  if (state.route) buildRoute();
+}
+$('#rainBtn').addEventListener('click', () => { setMode({ rain: !state.rain }); toast(state.rain ? '雨の日モードをオンにしました' : '雨の日モードをオフにしました'); });
+$('#routeSeason').addEventListener('change', e => setMode({ season: e.target.value }));
+$('#routeRain').addEventListener('change', e => setMode({ rain: e.target.checked }));
 $('#startTime').addEventListener('change', e => { state.start = e.target.value || '09:00'; saveState(); buildRoute(); });
 $('#returnHotel').addEventListener('change', e => { state.ret = e.target.checked; saveState(); buildRoute(); });
 $('#shareBtn').addEventListener('click', async () => {
@@ -1005,6 +1206,11 @@ function openEditor(id) {
       <div class="two"><label>休み<input id="fClosed" value="${esc(v.closed || '')}" placeholder="例：月曜"></label><label>料金の補足<input id="fFeeNote" value="${esc(v.feeNote || '')}"></label></div>
       <label>歴史・見どころ<textarea id="fHist">${esc(v.history || '')}</textarea></label>
       <label>ワンポイント<input id="fTips" value="${esc(v.tips || '')}"></label>
+      <div class="two"><label>雨の日<select id="fRain"><option value="2" ${rainLevel(v) === 2 ? 'selected' : ''}>雨でも快適（屋内中心）</option><option value="1" ${rainLevel(v) === 1 ? 'selected' : ''}>傘があれば大丈夫</option><option value="0" ${rainLevel(v) === 0 ? 'selected' : ''}>雨の日は不向き</option></select></label>
+        <label>雨の日のひとこと<input id="fRainNote" value="${esc(v.rainNote || '')}" placeholder="例：本堂内でゆっくり拝観できます"></label></div>
+      ${Object.entries(SEASONS).map(([k, sv]) => `<label>${sv.icon} ${sv.label}の見どころ（${sv.months}）<input id="fSeason_${k}" value="${esc((v.seasons || {})[k] || '')}"></label>`).join('')}
+      <label style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">混雑しやすい季節：${Object.entries(SEASONS).map(([k, sv]) => `<span><input type="checkbox" id="fPeak_${k}" ${(v.peak || []).includes(k) ? 'checked' : ''}> ${sv.label}</span>`).join('')}</label>
+      <div class="two"><label>冬期（12〜2月）の終了<input id="fWClose" type="time" value="${esc((v.winter || {}).close || '')}"></label><label>冬期の最終受付<input id="fWLast" type="time" value="${esc((v.winter || {}).lastEntry || '')}"></label></div>
       <button class="btn primary" id="saveSpot">保存する</button>
       ${s && s.builtin && custom.overrides[s.id] ? `<button class="btn" type="button" onclick="delete custom.overrides['${esc(s.id)}'];saveCustom();openAdmin();toast('初期状態に戻しました')">初期状態に戻す</button>` : ''}
     </div>`);
@@ -1033,6 +1239,11 @@ function saveSpotFromForm() {
     history: $('#fHist').value.trim(), tips: $('#fTips').value.trim()
   };
   rec.meal = rec.cat === 'food';
+  rec.rain = +$('#fRain').value; rec.rainNote = $('#fRainNote').value.trim();
+  rec.seasons = {}; rec.peak = [];
+  Object.keys(SEASONS).forEach(k => { const v = $('#fSeason_' + k).value.trim(); if (v) rec.seasons[k] = v; if ($('#fPeak_' + k).checked) rec.peak.push(k); });
+  const wc = $('#fWClose').value, wl = $('#fWLast').value;
+  rec.winter = (wc || wl) ? { close: wc, lastEntry: wl } : null;
   const orig = SPOT[id];
   if (orig && orig.gateway) delete rec.access; // 山道経由のスポットは経由設定を維持
   if (orig && orig.builtin) custom.overrides[id] = rec;
@@ -1077,6 +1288,8 @@ rebuildSpots();
   state.selected = decodeURIComponent(m[1]).split(',').filter(id => SPOT[id]);
   const t = location.hash.match(/t=(\d{3,4})/); if (t) { const v = t[1].padStart(4, '0'); state.start = v.slice(0, 2) + ':' + v.slice(2); }
   const r = location.hash.match(/r=([01])/); if (r) state.ret = r[1] === '1';
+  const k = location.hash.match(/k=(\w+)/); if (k && SEASONS[k[1]]) state.season = k[1];
+  const w = location.hash.match(/w=([01])/); if (w) state.rain = w[1] === '1';
   state.fromHash = true;
 })();
 renderAll();
