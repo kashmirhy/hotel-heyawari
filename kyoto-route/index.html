@@ -537,7 +537,81 @@ const BUILTIN_SPOTS = [
     open: '11:00', close: '21:00',
     desc: '山科駅直結の商業施設。和食から軽食まで、飲食店が揃います。',
     history: '地下鉄山科駅に直結。毘沙門堂や山科疏水を巡る前後の食事や休憩に便利です。',
-    tips: '営業時間は店舗により異なります。' }
+    tips: '営業時間は店舗により異なります。' },
+
+  // ---- 2026年9月 追加分（ホテルご推薦）。座標・徒歩時間は住所からの推定値 ----
+  { id: 'himukai', name: '日向大神宮（京のお伊勢さん）', area: 'route', cat: 'history',
+    lat: 35.00400, lng: 135.79450, access: [{ st: 'keage', walk: 17 }], stay: 40, fee: 0, crowd: 1,
+    url: 'http://himukai.jp/', feeNote: '境内自由／社務所は10:00〜16:00',
+    desc: '内宮・外宮を備えた「京のお伊勢さん」。くぐると穢れが祓われる「天の岩戸」がある。',
+    history: '5世紀末、顕宗天皇の時代に日向国（宮崎）高千穂の峰の神蹟を移したのが起こりと伝わる古社。清和天皇から「日向宮」の勅額を賜り、延喜の制では官幣社に列せられました。応仁の乱で焼失した後、1614年に徳川家康によって社領が戻され再建されています。神明造の内宮・外宮が並び、かつては東海道を行き来する旅人が道中の安全を祈り、伊勢神宮への代参として多くの人が訪れました。境内奥の「天の岩戸」は、人ひとりが通り抜けられる岩の穴で、くぐると罪や穢れが清められるといわれます。',
+    tips: '蹴上駅から山道を上った先にあります。歩きやすい靴で。旧東海道・車石とあわせて巡れます。' },
+  { id: 'tamuramaro', name: '坂上田村麻呂公園（田村麻呂の墓）', area: 'yamashina', cat: 'history',
+    lat: 34.97000, lng: 135.80750, access: [{ st: 'nagitsuji', walk: 20 }, { st: 'ono', walk: 15 }], stay: 20, fee: 0, crowd: 1,
+    url: 'https://mamop.jp/20150329/72001',
+    desc: '清水寺を開いた征夷大将軍・坂上田村麻呂の墓とされる古墳がある公園。',
+    history: '坂上田村麻呂は平安初期の武官で、780年ごろ清水寺の創建に関わったと伝わります。801年に征夷大将軍として東北へ出陣し、802年に胆沢城を築いて蝦夷の指導者アテルイとモレを降伏させました。公園内の古墳が田村麻呂の墓とされ、1894年の平安遷都1100年を記念して有志が墓所を修理し、石碑を建てました。近くの西野山古墳を本当の墓とする説もあり、歴史好きには想像が広がる場所です。',
+    tips: '住宅街の中の公園です。静かにお参りを。' },
+  { id: 'otowasoba', name: '霞中庵 音和そば', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.98300, lng: 135.84200, access: [{ st: 'yamashina', walk: 45 }], stay: 50, fee: 1200, crowd: 2,
+    open: '10:00', close: '15:30', lastEntry: '15:00', closed: '月曜', url: 'https://www.warabinosato.co.jp/user_data/otowasoba',
+    feeNote: '特盛蕎麦1,000円・そばと角重1,300円など',
+    desc: '料亭「わらびの里」監修。毎朝石臼で挽く十割蕎麦を、音羽川沿いの山あいで。',
+    history: '京料理の料亭「わらびの里」が営む蕎麦処。鈴鹿山系の水で育った多賀そばを毎朝石臼で挽いて自家製粉し、十割蕎麦に仕立てています。料理はすべて料亭の料理長の監修。大きな窓の外に緑が広がる、山科の奥座敷のような一軒です。',
+    tips: 'バス停から細い坂道を上ります（お店の案内では車での来店がすすめられています）。歩きやすい靴で。' },
+  { id: 'ramen-ten', name: 'ラーメン天', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.98550, lng: 135.80950, access: [{ st: 'higashino', walk: 9 }, { st: 'nagitsuji', walk: 13 }], stay: 35, fee: 900, crowd: 2,
+    open: '11:00', close: '26:00', lastEntry: '25:30', closed: '木曜', url: 'https://www.ramen-ten.kyoto/',
+    desc: '1985年創業、山科で40年以上愛される昭和の京都ラーメン。',
+    history: '昭和60年（1985年）創業の老舗。昔ながらの醤油ラーメンと、お得なセットで地元の人に親しまれてきました。昼から深夜2時まで通しで営業しています。',
+    tips: 'お昼どきは地元の方で混み合うこともあります。' },
+  { id: 'fujinami', name: '藤菜美 製造直売店', area: 'daigo', cat: 'food', meal: false, priceLabel: 'お土産目安',
+    lat: 34.94800, lng: 135.80700, access: [{ st: 'daigo', walk: 10 }], stay: 15, fee: 700, crowd: 1,
+    open: '11:00', close: '17:00', closed: '不定休', url: 'https://www.kyoto-fujinami.jp/',
+    feeNote: '抹茶だんご5本650円・抹茶わらび750円など',
+    desc: '東山・三年坂の人気だんご店の工場直売所。名物のだんごとわらび餅を出来たてで。',
+    history: '清水寺へ続く三年坂などに店を構える京だんごの老舗「藤菜美」の製造拠点に併設された直売店です。観光地の本店では行列になることもあるだんごやわらび餅を、作りたてで買うことができます。',
+    tips: '持ち帰り中心のお店です。明智藪（小栗栖）のすぐ近くです。' },
+  { id: 'rhone', name: 'スイス菓子 ローヌ 本店', area: 'yamashina', cat: 'food', meal: false, priceLabel: 'お菓子目安',
+    lat: 34.99600, lng: 135.80750, access: [{ st: 'misasagi', walk: 5 }, { st: 'yamashina', walk: 10 }], stay: 20, fee: 1000, crowd: 1,
+    open: '09:00', close: '19:00', closed: '火曜（祝日の場合は翌日）', url: 'http://www.swiss-rhone.com/home.html',
+    desc: '山科を代表する洋菓子店。ふわふわのチーズケーキが名物。',
+    history: '「山科グルメの元祖」とも呼ばれる、地元で長く愛されてきたスイス菓子の店。看板のチーズケーキはお土産にも人気です。山科駅直結のラクト山科にも店舗があります。',
+    tips: '持ち帰り中心のお店です。天智天皇陵や旧東海道と組み合わせやすい場所です。' },
+  { id: 'ebisu', name: '担担麺 胡（えびす）山科本店', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.99250, lng: 135.81650, access: [{ st: 'yamashina', walk: 4 }], stay: 35, fee: 1000, crowd: 2,
+    open: '11:00', close: '15:00', lastEntry: '14:30', closed: '年中無休（臨時休業あり）', url: 'https://kyoto-yebisu.com/',
+    feeNote: '平日は15:00〜17:30休憩（夜は23:00まで）、土日祝は11:00〜23:00通し営業',
+    desc: '京都発の担担麺専門店の本店。濃厚でしっかり辛い一杯。',
+    history: '山科に本店を構える担担麺専門店。ガツンとくる辛さと濃厚なスープで人気を集め、京都駅前などにも店舗を広げています。',
+    tips: '山科駅から近く、毘沙門堂や疏水散策の前後に便利です。' },
+  { id: 'daiya', name: '大也鮨', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.99350, lng: 135.81500, access: [{ st: 'yamashina', walk: 2 }], stay: 45, fee: 1000, crowd: 2,
+    open: '11:30', close: '22:00', closed: '月曜', url: 'https://tabelog.com/kyoto/A2601/A260603/26008485/',
+    feeNote: 'お昼は寿司と麺のセット1,000円など',
+    desc: '厚切りのネタが自慢の、地元に愛される町の寿司店。',
+    history: '山科駅のすぐそばで長く営む寿司店。厚切りの寿司と麺のセットランチが、地元の人に人気です。',
+    tips: '山科駅3番出口から徒歩約2分。' },
+  { id: 'ittan', name: '和ダイニング 一旦', area: 'daigo', cat: 'food', meal: true,
+    lat: 34.96400, lng: 135.81500, access: [{ st: 'ono', walk: 5 }], stay: 50, fee: 1200, crowd: 1,
+    open: '11:30', close: '14:00', lastEntry: '13:30', closed: '月曜', url: 'https://r.gnavi.co.jp/dmdh4g120000/',
+    feeNote: '昼11:30〜14:00／夜17:30〜23:00',
+    desc: '小野駅近くの和食ダイニング。随心院・勧修寺めぐりの昼食に。',
+    history: '小野の住宅街にある和食の店。昼は定食、夜は居酒屋として地元の人に親しまれています。',
+    tips: 'お昼の営業は14時まで（ラストオーダーは早めです）。' },
+  { id: 'monogataru', name: 'cafe monogataru', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.99850, lng: 135.81100, access: [{ st: 'yamashina', walk: 12 }, { st: 'misasagi', walk: 10 }], stay: 50, fee: 1500, crowd: 1,
+    open: '11:30', close: '17:00', lastEntry: '16:30', closed: '月曜', url: 'https://tabelog.com/kyoto/A2601/A260603/26043661/',
+    desc: '御陵の住宅街にある、ゆったり過ごせるカフェ。ランチや甘いものに。',
+    history: '山科・御陵の落ち着いた住宅街にあるカフェ。犬連れでも利用できるお店として紹介されています。',
+    tips: '営業時間は祝日や季節で変わることがあります。' },
+  { id: 'hatsumi', name: '初美（寿司）', area: 'yamashina', cat: 'food', meal: true,
+    lat: 34.99600, lng: 135.81650, access: [{ st: 'yamashina', walk: 5 }], stay: 45, fee: 1500, crowd: 1,
+    open: '11:30', close: '15:00', lastEntry: '14:30', closed: '水曜', url: 'https://tabelog.com/kyoto/A2601/A260603/26016026/dtlrvwlst/',
+    feeNote: '昼11:30〜15:00／夜16:30〜21:00',
+    desc: '山科駅の北、毘沙門堂へ向かう途中にある寿司と食事の店。',
+    history: '安朱の町にある寿司店。山科駅から毘沙門堂へ向かう道の途中にあり、参拝の前後に立ち寄りやすい場所です。',
+    tips: '毘沙門堂・山科疏水とあわせて。' }
 ];
 
 const PRESETS = [
@@ -643,7 +717,24 @@ const SPOT_EXTRA = {
   'ugetsu': { rain: 2, rainNote: '屋内でゆっくり食事ができます。', peak: ['spring'], seasons: {
     spring: '桜の季節は醍醐寺とともに混み合います。' } },
   'paseo': { rain: 2, rainNote: '駅直結なので傘いらずです。', seasons: {} },
-  'lacto': { rain: 2, rainNote: '駅直結なので傘いらずです。', seasons: {} }
+  'lacto': { rain: 2, rainNote: '駅直結なので傘いらずです。', seasons: {} },
+  'himukai': { rain: 1, rainNote: '参道は山道です。雨の日は足元にご注意ください（天の岩戸へは石段が続きます）。', seasons: {
+    spring: '山の新緑に包まれた参道。',
+    summer: '木立の中の境内は、夏でもひんやり。',
+    autumn: '境内の紅葉は知る人ぞ知る名所。人の少ない山中で色づきを楽しめます。',
+    winter: '凛とした空気の中、静かにお参りできます。' } },
+  'tamuramaro': { rain: 1, seasons: { spring: '公園の桜が咲く季節。' } },
+  'otowasoba': { rain: 1, rainNote: 'お店の中は大きな窓から緑を眺められますが、バス停からの坂道は雨だと滑りやすくなります。', seasons: {
+    summer: '窓いっぱいの緑を眺めながら、冷たい十割蕎麦を。',
+    autumn: '山あいの紅葉を眺めながらの蕎麦は格別です。' } },
+  'ramen-ten': { rain: 1, seasons: {} },
+  'fujinami': { rain: 1, seasons: {} },
+  'rhone': { rain: 1, seasons: {} },
+  'ebisu': { rain: 1, seasons: {} },
+  'daiya': { rain: 2, rainNote: '山科駅のすぐそばで、雨の日も便利です。', seasons: {} },
+  'ittan': { rain: 1, seasons: {} },
+  'monogataru': { rain: 1, seasons: {} },
+  'hatsumi': { rain: 1, seasons: {} }
 };
 
 /* =========================================================
@@ -734,7 +825,8 @@ const BUS_LINKS = [
   { a: 'daigo',     b: 'akechiyabu',  stopA: '醍醐駅', stopB: '小栗栖',   ride: 6, walkA: 2, walkB: 6 },
   { a: 'daigoji',   b: 'ichigonji',   stopA: '醍醐寺前', stopB: '一言寺', ride: 5, walkA: 4, walkB: 5 },
   { a: 'ishida',    b: 'ichigonji',   stopA: '石田駅', stopB: '一言寺',   ride: 6, walkA: 2, walkB: 5 },
-  { a: 'yamashina', b: 'gangyoji',    stopA: '山科駅', stopB: '北花山',   ride: 7, walkA: 3, walkB: 6 }
+  { a: 'yamashina', b: 'gangyoji',    stopA: '山科駅', stopB: '北花山',   ride: 7, walkA: 3, walkB: 6 },
+  { a: 'yamashina', b: 'otowasoba',   stopA: '山科駅', stopB: '小山',     ride: 15, walkA: 3, walkB: 12 }
 ];
 function busLinksOf(id) { return BUS_LINKS.filter(l => SPOT[l.a] || ST[l.a]).filter(l => l.a === id || l.b === id); }
 
@@ -751,7 +843,9 @@ function computeLeg(a, b) {
   // 雨の日は、乗り物を使った方が歩く距離が短くなるなら乗り物を優先
   const walkOk = state.rain
     ? (walkDirect <= 8 || !(best.walkSum < walkDirect - 3 && best.min <= walkDirect + 10))
-    : (walkDirect <= 15 || walkDirect <= best.min);
+    : (walkDirect <= 15 || (walkDirect <= best.min &&
+        // 30分を超える長い徒歩は、15分以内の遅れで歩く時間が10分以上減るなら乗り物を使う
+        !(walkDirect > 30 && best.min <= walkDirect + 15 && best.walkSum < walkDirect - 10)));
   if (walkOk) return walkLeg;
   return { type: 'transit', min: best.min, fareNormal: best.fare, from: a, to: b, steps: best.steps };
 }
@@ -1043,7 +1137,7 @@ function renderCards() {
     const hours = h.open ? `${h.open}〜${h.close || ''}` : '';
     const rl = rainLevel(s), st = seasonText(s), sv = SEASONS[state.season];
     const rainBadge = rl === 2 ? `<span class="badge rain2">${RAIN_LABEL[2]}</span>` : (state.rain ? `<span class="badge ${rl === 0 ? 'rain0' : ''}">${RAIN_LABEL[rl]}</span>` : '');
-    const feeLabel = s.cat === 'food' ? `食事目安 ${yen(s.fee || 0)}` : (s.fee ? `拝観 ${yen(s.fee)}` : '拝観無料');
+    const feeLabel = s.cat === 'food' ? `${s.priceLabel || '食事目安'} ${yen(s.fee || 0)}` : (s.fee ? `拝観 ${yen(s.fee)}` : '拝観無料');
     return `<article class="card ${sel ? 'sel' : ''} ${state.rain && rl === 0 ? 'dim' : ''}" data-id="${esc(s.id)}">
       <button class="card-head" data-toggle="${esc(s.id)}" aria-pressed="${sel}">
         <span class="check">✓</span>
@@ -1062,7 +1156,7 @@ function renderCards() {
         ${s.feeNote ? `<p class="meta"><span>※${esc(s.feeNote)}</span></p>` : ''}
         ${s.tips ? `<div class="tip">💡 ${esc(s.tips)}</div>` : ''}
         ${seasonTable(s)}
-        <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図で見る</a></div>
+        <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図で見る</a>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${s.cat === 'food' ? 'お店の情報' : '公式・紹介ページ'}</a>` : ''}</div>
       </div></details>` : ''}
     </article>`;
   }).join('') || '<p class="empty">条件に合うスポットがありません。</p>';
@@ -1145,7 +1239,7 @@ function renderRoute() {
   $('#totals').innerHTML = `
     <div class="tot pass"><div class="k">交通費</div><div class="v">0円</div><div class="k">${esc(PASS.name)}</div></div>
     <div class="tot"><div class="k">拝観料など</div><div class="v">${yen(r.fees)}</div></div>
-    <div class="tot"><div class="k">食事（目安）</div><div class="v">${yen(r.food)}</div></div>
+    <div class="tot"><div class="k">食事・お土産（目安）</div><div class="v">${yen(r.food)}</div></div>
     <div class="tot"><div class="k">所要時間</div><div class="v">${fmtDur(r.endMin - r.startMin)}</div><div class="k">${fmtTime(r.startMin)}〜${fmtTime(r.endMin)}</div></div>
     <div class="tot grand"><div class="k">おひとりさま 合計の目安</div><div class="v">${yen(total)}</div></div>`;
   $('#saveNote').textContent = (r.fareSaved ? `一日券のおかげで、通常なら約${yen(r.fareSaved)}かかる電車賃が0円になっています。` : '今回のルートは徒歩のみです（一日券はバス移動などにもご利用いただけます）。') +
@@ -1172,7 +1266,7 @@ function renderRoute() {
       return `<li class="tl-stop"><div class="tl-time">${fmtTime(it.time)}</div><div class="tl-card"><h3><span class="num home">宿</span>${esc(HOTEL.name)}</h3><div class="sub">${it.kind === 'start' ? '出発　三条大橋西詰' : '到着　おつかれさまでした'}</div></div></li>`;
     }
     const s = it.node;
-    const feeTxt = s.cat === 'food' ? `食事目安 ${yen(s.fee || 0)}` : (s.fee ? `拝観料 ${yen(s.fee)}` : '拝観無料');
+    const feeTxt = s.cat === 'food' ? `${s.priceLabel || '食事目安'} ${yen(s.fee || 0)}` : (s.fee ? `拝観料 ${yen(s.fee)}` : '拝観無料');
     const n = r.order.length;
     const move = r.custom ? `<span class="move no-print">
         <button data-move="-1" data-idx="${it.no - 1}" aria-label="${esc(s.name)}をひとつ前へ" ${it.no === 1 ? 'disabled' : ''}>▲</button>
@@ -1185,7 +1279,7 @@ function renderRoute() {
       ${seasonText(s) ? `<span class="season-line"><b>${SEASONS[state.season].icon} ${SEASONS[state.season].label}</b>　${esc(seasonText(s))}</span>` : ''}
       ${state.rain && s.rainNote ? `<span class="rain-line">☔ ${esc(s.rainNote)}</span>` : ''}
       ${s.tips ? `<div class="sub">💡 ${esc(s.tips)}</div>` : ''}
-      <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図</a></div>
+      <div class="tl-links"><a href="${mapsPlace(s)}" target="_blank" rel="noopener">地図</a>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${s.cat === 'food' ? 'お店の情報' : '公式・紹介ページ'}</a>` : ''}</div>
     </div></li>`;
   }).join('');
   drawMap();
@@ -1193,6 +1287,11 @@ function renderRoute() {
 function planWarns(r) {
   const w = [];
   r.items.forEach(it => {
+    if (it.kind === 'leg') {
+      const longest = Math.max(0, ...it.leg.steps.filter(x => x.k === 'walk').map(x => x.min));
+      if (longest > 30) w.push(`${it.leg.to.name}へ向かう途中に、徒歩約${longest}分の長い区間があります。歩きやすい靴でお出かけいただくか、自分で並べ替える際は近いスポット同士をまとめるのがおすすめです。`);
+      return;
+    }
     if (it.kind !== 'spot') return;
     const s = it.node;
     if (s.meal && (it.start < 630 || it.start > 870)) w.push(`${s.name}：お食事の時間帯から外れています（${fmtTime(it.start)}着）`);
@@ -1555,6 +1654,8 @@ function openEditor(id) {
       <div class="two"><label>休み<input id="fClosed" value="${esc(v.closed || '')}" placeholder="例：月曜"></label><label>料金の補足<input id="fFeeNote" value="${esc(v.feeNote || '')}"></label></div>
       <label>歴史・見どころ<textarea id="fHist">${esc(v.history || '')}</textarea></label>
       <label>ワンポイント<input id="fTips" value="${esc(v.tips || '')}"></label>
+      <label>公式サイト・紹介ページのURL（任意）<input id="fUrl" type="url" value="${esc(v.url || '')}" placeholder="https://..."></label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="fTakeout" ${v.cat === 'food' && v.meal === false ? 'checked' : ''} style="width:auto"> 食事処のうち、お菓子・お土産など持ち帰り中心のお店（昼食の時間に合わせない）</label>
       <div class="two"><label>雨の日<select id="fRain"><option value="2" ${rainLevel(v) === 2 ? 'selected' : ''}>雨でも快適（屋内中心）</option><option value="1" ${rainLevel(v) === 1 ? 'selected' : ''}>傘があれば大丈夫</option><option value="0" ${rainLevel(v) === 0 ? 'selected' : ''}>雨の日は不向き</option></select></label>
         <label>雨の日のひとこと<input id="fRainNote" value="${esc(v.rainNote || '')}" placeholder="例：本堂内でゆっくり拝観できます"></label></div>
       ${Object.entries(SEASONS).map(([k, sv]) => `<label>${sv.icon} ${sv.label}の見どころ（${sv.months}）<input id="fSeason_${k}" value="${esc((v.seasons || {})[k] || '')}"></label>`).join('')}
@@ -1587,7 +1688,10 @@ function saveSpotFromForm() {
     closed: $('#fClosed').value.trim(), feeNote: $('#fFeeNote').value.trim(),
     history: $('#fHist').value.trim(), tips: $('#fTips').value.trim()
   };
-  rec.meal = rec.cat === 'food';
+  const takeout = rec.cat === 'food' && $('#fTakeout').checked;
+  rec.meal = rec.cat === 'food' && !takeout;
+  rec.priceLabel = takeout ? 'お土産目安' : '';
+  const url = $('#fUrl').value.trim(); rec.url = /^https?:\/\//.test(url) ? url : '';
   rec.rain = +$('#fRain').value; rec.rainNote = $('#fRainNote').value.trim();
   rec.seasons = {}; rec.peak = [];
   Object.keys(SEASONS).forEach(k => { const v = $('#fSeason_' + k).value.trim(); if (v) rec.seasons[k] = v; if ($('#fPeak_' + k).checked) rec.peak.push(k); });
