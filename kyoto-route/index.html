@@ -119,6 +119,8 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
 .tot.grand{grid-column:1/-1;background:var(--accent-soft)}
 .tot.grand .v{color:var(--accent);font-size:26px}
 .save-note{font-size:12px;color:var(--ok);margin-top:8px}
+.infobox{background:var(--ai-soft);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
+.infobox b{color:var(--ai)}
 .warnbox{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
 .timeline{list-style:none;margin:0;padding:0}
 .tl-stop{display:grid;grid-template-columns:54px 1fr;gap:10px;align-items:start}
@@ -273,7 +275,7 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
         <button class="btn" onclick="window.print()">印刷・PDF保存</button>
         <button class="btn" data-go="spots">スポットを選び直す</button>
       </div>
-      <p class="foot">所要時間は徒歩時速約4.5km・待ち時間込みの目安です。</p>
+      <p class="foot">回る順番は、拝観時間・混雑しやすい時期・お食事の時間を考慮して自動で決めています。そのため、最短の順番にならないことがあります。<br>所要時間は徒歩時速約4.5km・待ち時間込みの目安です。</p>
     </div>
   </section>
 
@@ -306,6 +308,14 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
         <li>桜や紅葉で混みやすい時期のスポットは、なるべく朝の早い時間に回るようルートを組みます。冬は閉門が早いお寺の時間にも対応します。</li>
         <li>「雨の日モード」では、屋内で楽しめるスポットを上に表示し、歩く距離が短くなるよう地下鉄を優先します。山道など雨の日に不向きな場所には注意が出ます。</li>
       </ul>
+      <h3>回る順番の決め方</h3>
+      <p>選んだスポットを回る順番は、移動時間が短くなるように自動で決めています。ただし、次の点も考慮するため、<b>最短の順番にならないことがあります</b>。</p>
+      <ul>
+        <li>拝観の受付終了時刻に間に合うこと（冬は閉門が早いお寺にも対応）</li>
+        <li>桜や紅葉で混みやすい時期のスポットに、なるべく早い時間に着くこと</li>
+        <li>お食事をお昼どき（11〜14時ごろ）にとれること、開門前の待ち時間が少ないこと</li>
+      </ul>
+      <p>混雑や待ち時間を避けるための遠回りは、最短の順番より最大10分までにしています。最短の順番と違う場合は、ルート画面に理由を表示します。</p>
       <h3>費用の表示について</h3>
       <p>一日券で乗れる交通機関は<b>0円</b>で計算しています。拝観料・食事代は目安です。参考として、一日券がなかった場合の通常運賃も表示しています。</p>
     </div>
@@ -721,31 +731,51 @@ function planRoute(spots, startMin, ret) {
   //   dur  : 所要時間（分）
   //   hard : 必ず避けたい問題（受付終了に間に合わない、昼食が大きく時間外）
   //   soft : できれば避けたい問題（混雑期のスポットが遅い時間、開門待ち、昼食がやや時間外）
+  // 内訳（late:受付終了超過 meal:昼食の時間外 peak:混雑期の遅い到着 wait:開門待ち）は、
+  // 最短ルートと違う順番になった理由の表示に使う
   const evaluate = ord => {
-    let t = startMin, cur = 0, hard = 0, soft = 0;
+    let t = startMin, cur = 0, late = 0, meal = 0, peak = 0, wait = 0, hard = 0, soft = 0;
+    const lateIds = [];
     for (const k of ord) {
       t += M[cur][k].min;
       const s = nodes[k];
       const h = hoursFor(s);
       const o = toMin(h.open);
-      if (o != null && t < o) { soft += (o - t) * 0.3; t = o; }
+      if (o != null && t < o) { wait += o - t; soft += (o - t) * 0.3; t = o; }
       const le = toMin(h.lastEntry || h.close);
-      if (le != null && t > le) hard += 60 + (t - le);
-      if (isPeak(s) && !s.meal && t > 630) soft += (t - 630) * 0.3;   // 混雑期は10:30までの到着が理想
+      if (le != null && t > le) { late += 60 + (t - le); hard += 60 + (t - le); lateIds.push(s.id); }
+      if (isPeak(s) && !s.meal && t > 630) { peak += t - 630; soft += (t - 630) * 0.3; }   // 混雑期は10:30までの到着が理想
       if (s.meal) {
         const off = t < 660 ? 660 - t : t > 840 ? t - 840 : 0;          // 11:00〜14:00が理想
+        meal += off;
         if (off > 30) hard += off - 30; else soft += off;
       }
       t += s.stay || 30; cur = k;
     }
     if (ret) t += M[cur][0].min;
-    return { dur: t - startMin, hard, soft };
+    return { dur: t - startMin, hard, soft, late, meal, peak, wait, lateIds };
+  };
+  // 最短ルートと違う順番を選んだ理由
+  const explain = (pick, shortest) => {
+    const extra = pick.dur - shortest.dur;
+    if (extra <= 0) return null;
+    const nm = ids => [...new Set(ids)].map(id => SPOT[id] ? SPOT[id].name : id).join('・');
+    const reasons = [];
+    const saved = shortest.lateIds.filter(id => !pick.lateIds.includes(id));
+    if (saved.length) reasons.push(`${nm(saved)}の拝観受付時間に間に合うように`);
+    if (pick.meal < shortest.meal) reasons.push(pick.meal > 0 ? 'お食事の時間がお昼どき（11〜14時ごろ）に近くなるように' : 'お食事をお昼どき（11〜14時ごろ）にとれるように');
+    if (pick.peak < shortest.peak) {
+      const peakIds = spots.filter(s => isPeak(s) && !s.meal).map(s => s.id);
+      reasons.push(`${SEASONS[state.season].label}に混みやすい${nm(peakIds)}に、なるべく早い時間に着けるように`);
+    }
+    if (pick.wait < shortest.wait) reasons.push('開門前の待ち時間が少なくなるように');
+    return { extra, reasons };
   };
   // 混雑回避などの「できれば」のために許す遠回りは最大この分数まで
   const DETOUR_SLACK = 10;
   const scalar = e => e.hard * 1000 + e.dur + e.soft * 0.5;
   const idx = spots.map((_, i) => i + 1);
-  let best = idx.slice();
+  let best = idx.slice(), orderNote = null;
   if (idx.length <= 8) {
     // 全順列（Heapのアルゴリズム）で全候補を評価し、
     // ①hardが最小 ②その中の最短時間+DETOUR_SLACK以内 ③softが最小（同点なら短い方）の順で選ぶ
@@ -765,6 +795,8 @@ function planRoute(spots, startMin, ret) {
     const pick = ok.filter(x => x.dur <= minDur + DETOUR_SLACK)
       .sort((x, y) => (x.dur + x.soft) - (y.dur + y.soft) || x.dur - y.dur)[0];
     best = pick.ord;
+    const shortest = cands.reduce((m, x) => (x.dur < m.dur || (x.dur === m.dur && scalar(x) < scalar(m)) ? x : m));
+    orderNote = explain(pick, shortest);
   } else {
     const score = ord => scalar(evaluate(ord));
     let bestS;
@@ -805,7 +837,7 @@ function planRoute(spots, startMin, ret) {
     t += leg.min; fareSaved += leg.fareNormal; walkTotal += walkOf(leg);
     items.push({ kind: 'end', node: HOTEL, time: t });
   }
-  return { items, fees, food, fareSaved, walkTotal, startMin, endMin: t, order: best.map(k => nodes[k].id) };
+  return { items, fees, food, fareSaved, walkTotal, startMin, endMin: t, order: best.map(k => nodes[k].id), orderNote };
 }
 
 /* =========================================================
@@ -977,7 +1009,11 @@ function renderRoute() {
     <div class="tot grand"><div class="k">おひとりさま 合計の目安</div><div class="v">${yen(total)}</div></div>`;
   $('#saveNote').textContent = (r.fareSaved ? `一日券のおかげで、通常なら約${yen(r.fareSaved)}かかる電車賃が0円になっています。` : '今回のルートは徒歩のみです（一日券はバス移動などにもご利用いただけます）。') +
     `　歩く時間の合計：約${fmtDur(r.walkTotal)}` + (state.rain ? '（雨の日モード：地下鉄を優先しています）' : '');
-  $('#warns').innerHTML = planWarns(r).map(w => `<div class="warnbox">⚠ ${esc(w)}</div>`).join('');
+  const on = r.orderNote;
+  $('#warns').innerHTML = (on ? `<div class="infobox"><b>この順番について</b><br>${
+      on.reasons.length ? esc(on.reasons.join('、')) + '、' : '拝観時間や混雑を考慮して、'
+    }最短の順番より約${on.extra}分長い順番にしています。</div>` : '') +
+    planWarns(r).map(w => `<div class="warnbox">⚠ ${esc(w)}</div>`).join('');
   $('#timeline').innerHTML = r.items.map(it => {
     if (it.kind === 'leg') return legHtml(it.leg, it.depart);
     if (it.kind === 'start' || it.kind === 'end') {
