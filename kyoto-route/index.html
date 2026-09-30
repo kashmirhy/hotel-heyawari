@@ -717,36 +717,57 @@ function computeLeg(a, b) {
 function planRoute(spots, startMin, ret) {
   const nodes = [HOTEL, ...spots];
   const M = nodes.map(a => nodes.map(b => (a === b ? null : computeLeg(a, b))));
-  const score = ord => {
-    let t = startMin, cur = 0, pen = 0, wait = 0;
+  // 順番ごとの評価
+  //   dur  : 所要時間（分）
+  //   hard : 必ず避けたい問題（受付終了に間に合わない、昼食が大きく時間外）
+  //   soft : できれば避けたい問題（混雑期のスポットが遅い時間、開門待ち、昼食がやや時間外）
+  const evaluate = ord => {
+    let t = startMin, cur = 0, hard = 0, soft = 0;
     for (const k of ord) {
       t += M[cur][k].min;
       const s = nodes[k];
       const h = hoursFor(s);
       const o = toMin(h.open);
-      if (o != null && t < o) { wait += o - t; t = o; }
+      if (o != null && t < o) { soft += (o - t) * 0.3; t = o; }
       const le = toMin(h.lastEntry || h.close);
-      if (le != null && t > le) pen += 600 + (t - le) * 10;
-      if (isPeak(s) && !s.meal) pen += (t - startMin) * 0.4;   // 混雑期のスポットはなるべく早い時間に
-      if (s.meal) { if (t < 660) pen += (660 - t) * 1.5; else if (t > 840) pen += (t - 840) * 1.5; }
+      if (le != null && t > le) hard += 60 + (t - le);
+      if (isPeak(s) && !s.meal && t > 630) soft += (t - 630) * 0.3;   // 混雑期は10:30までの到着が理想
+      if (s.meal) {
+        const off = t < 660 ? 660 - t : t > 840 ? t - 840 : 0;          // 11:00〜14:00が理想
+        if (off > 30) hard += off - 30; else soft += off;
+      }
       t += s.stay || 30; cur = k;
     }
     if (ret) t += M[cur][0].min;
-    return (t - startMin) + pen + wait * 0.3;
+    return { dur: t - startMin, hard, soft };
   };
+  // 混雑回避などの「できれば」のために許す遠回りは最大この分数まで
+  const DETOUR_SLACK = 10;
+  const scalar = e => e.hard * 1000 + e.dur + e.soft * 0.5;
   const idx = spots.map((_, i) => i + 1);
-  let best = idx.slice(), bestS = score(best);
+  let best = idx.slice();
   if (idx.length <= 8) {
-    // 全順列（Heapのアルゴリズム）
+    // 全順列（Heapのアルゴリズム）で全候補を評価し、
+    // ①hardが最小 ②その中の最短時間+DETOUR_SLACK以内 ③softが最小（同点なら短い方）の順で選ぶ
+    const cands = [];
     const a = idx.slice(), c = new Array(a.length).fill(0); let i = 0;
+    cands.push({ ord: a.slice(), ...evaluate(a) });
     while (i < a.length) {
       if (c[i] < i) {
         const j = i % 2 ? c[i] : 0; [a[j], a[i]] = [a[i], a[j]];
-        const s = score(a); if (s < bestS) { bestS = s; best = a.slice(); }
+        cands.push({ ord: a.slice(), ...evaluate(a) });
         c[i]++; i = 0;
       } else { c[i] = 0; i++; }
     }
+    const minHard = Math.min(...cands.map(x => x.hard));
+    const ok = cands.filter(x => x.hard - minHard < 1e-9);
+    const minDur = Math.min(...ok.map(x => x.dur));
+    const pick = ok.filter(x => x.dur <= minDur + DETOUR_SLACK)
+      .sort((x, y) => (x.dur + x.soft) - (y.dur + y.soft) || x.dur - y.dur)[0];
+    best = pick.ord;
   } else {
+    const score = ord => scalar(evaluate(ord));
+    let bestS;
     // 最近傍法＋2-opt
     const rest = idx.slice(), ord = []; let cur = 0;
     while (rest.length) {
