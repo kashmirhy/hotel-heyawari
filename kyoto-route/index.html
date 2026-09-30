@@ -119,6 +119,18 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
 .tot.grand{grid-column:1/-1;background:var(--accent-soft)}
 .tot.grand .v{color:var(--accent);font-size:26px}
 .save-note{font-size:12px;color:var(--ok);margin-top:8px}
+.order-mode{display:grid;gap:8px;margin:12px 0}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;border-radius:9px;padding:10px 6px;font-size:14px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);font-weight:bold;box-shadow:var(--shadow)}
+.order-hint{font-size:13px;color:var(--muted);margin:0}
+.move{margin-left:auto;display:flex;gap:6px;flex:0 0 auto}
+.move button{width:42px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:15px;color:var(--accent)}
+.move button:disabled{opacity:.3}
+.tl-card.flash{animation:flash 1.2s ease-out}
+@keyframes flash{from{box-shadow:0 0 0 3px var(--accent)}to{box-shadow:var(--shadow)}}
+@media (prefers-reduced-motion: reduce){.tl-card.flash{animation:none;outline:2px solid var(--accent)}}
+.infobox .btn{margin-top:6px}
 .infobox{background:var(--ai-soft);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
 .infobox b{color:var(--ai)}
 .warnbox{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
@@ -269,13 +281,14 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
       </div>
       <div id="warns"></div>
       <div id="map" class="no-print"></div>
+      <div class="order-mode no-print" id="orderMode"></div>
       <ol class="timeline" id="timeline"></ol>
       <div class="row-btns no-print">
         <button class="btn" id="shareBtn">ルートを共有</button>
         <button class="btn" onclick="window.print()">印刷・PDF保存</button>
         <button class="btn" data-go="spots">スポットを選び直す</button>
       </div>
-      <p class="foot">回る順番は、拝観時間・混雑しやすい時期・お食事の時間を考慮して自動で決めています。そのため、最短の順番にならないことがあります。<br>所要時間は徒歩時速約4.5km・待ち時間込みの目安です。</p>
+      <p class="foot">回る順番は、拝観時間・混雑しやすい時期・お食事の時間を考慮して自動で決めています。そのため、最短の順番にならないことがあります。「自分で並べる」を選ぶと、お好きな順番に入れ替えることもできます。<br>所要時間は徒歩時速約4.5km・待ち時間込みの目安です。</p>
     </div>
   </section>
 
@@ -287,6 +300,7 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
       <ul>
         <li>「スポット」で行きたい場所をタップして選びます（いくつでもOK）。</li>
         <li>「ルートを作る」を押すと、回る順番・乗る電車・時刻・費用を自動で計算します。</li>
+        <li>回りたい順番がある場合は、ルート画面の「自分で並べる」を選び、▲▼ボタンで入れ替えてください。電車や時刻、費用も自動で計算し直します。</li>
         <li>各スポットの「地図」から、スマホの地図アプリで道案内ができます。</li>
         <li>ホーム画面に追加すると、アプリのように使えます。</li>
       </ul>
@@ -829,7 +843,7 @@ function searchTransit(a, b) {
 }
 
 /* ---- ルート最適化（訪問順を自動で決める） ---- */
-function planRoute(spots, startMin, ret) {
+function planRoute(spots, startMin, ret, fixed) {
   const nodes = [HOTEL, ...spots];
   const M = nodes.map(a => nodes.map(b => (a === b ? null : computeLeg(a, b))));
   // 順番ごとの評価
@@ -881,7 +895,9 @@ function planRoute(spots, startMin, ret) {
   const scalar = e => e.hard * 1000 + e.dur + e.soft * 0.5;
   const idx = spots.map((_, i) => i + 1);
   let best = idx.slice(), orderNote = null;
-  if (idx.length <= 8) {
+  if (fixed) {
+    // 利用者が並べた順番のまま計算する
+  } else if (idx.length <= 8) {
     // 全順列（Heapのアルゴリズム）で全候補を評価し、
     // ①hardが最小 ②その中の最短時間+DETOUR_SLACK以内 ③softが最小（同点なら短い方）の順で選ぶ
     const cands = [];
@@ -955,10 +971,11 @@ try {
   if (s.start) state.start = s.start;
   if (typeof s.ret === 'boolean') state.ret = s.ret;
   if (typeof s.rain === 'boolean') state.rain = s.rain;
+  if (Array.isArray(s.customOrder)) state.customOrder = s.customOrder;
   // 季節は手動で選んだ当日のみ保持し、日をまたいだら今日の季節に戻す
   if (SEASONS[s.season] && s.seasonDay === new Date().toDateString()) state.season = s.season;
 } catch (e) {}
-function saveState() { lsSet(LS_STATE, JSON.stringify({ selected: state.selected, start: state.start, ret: state.ret, rain: state.rain, season: state.season, seasonDay: new Date().toDateString() })); }
+function saveState() { lsSet(LS_STATE, JSON.stringify({ selected: state.selected, start: state.start, ret: state.ret, rain: state.rain, season: state.season, seasonDay: new Date().toDateString(), customOrder: state.customOrder || null })); }
 
 const $ = sel => document.querySelector(sel);
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2000); }
@@ -1068,6 +1085,7 @@ function updateAction() {
 function toggleSpot(id) {
   const i = state.selected.indexOf(id);
   if (i >= 0) state.selected.splice(i, 1); else state.selected.push(id);
+  state.customOrder = null;   // スポットが変わったら、おすすめ順で作り直す
   saveState(); renderCards();
 }
 
@@ -1078,8 +1096,17 @@ function mapsWalk(a, b) { return `https://www.google.com/maps/dir/?api=1&origin=
 function buildRoute() {
   const spots = state.selected.map(id => SPOT[id]).filter(Boolean);
   if (!spots.length) { state.route = null; renderRoute(); return; }
-  state.route = planRoute(spots, toMin(state.start) ?? 540, state.ret);
-  try { history.replaceState(null, '', '#s=' + state.selected.map(encodeURIComponent).join(',') + '&t=' + state.start.replace(':', '') + '&r=' + (state.ret ? 1 : 0) + '&k=' + state.season + '&w=' + (state.rain ? 1 : 0)); } catch (e) {}
+  const start = toMin(state.start) ?? 540;
+  const auto = planRoute(spots, start, state.ret);
+  // 自分で並べた順番は、選んだスポットと一致しているときだけ使う
+  const co = state.customOrder;
+  if (co && !(co.length === spots.length && co.every(id => state.selected.includes(id)))) state.customOrder = null;
+  if (state.customOrder) {
+    state.route = planRoute(state.customOrder.map(id => SPOT[id]), start, state.ret, true);
+    state.route.custom = true; state.route.autoDur = auto.endMin - auto.startMin;
+  } else state.route = auto;
+  const ids = state.customOrder || state.selected;
+  try { history.replaceState(null, '', '#s=' + ids.map(encodeURIComponent).join(',') + '&t=' + state.start.replace(':', '') + '&r=' + (state.ret ? 1 : 0) + '&k=' + state.season + '&w=' + (state.rain ? 1 : 0) + (state.customOrder ? '&o=1' : '')); } catch (e) {}
   renderRoute();
 }
 
@@ -1124,7 +1151,18 @@ function renderRoute() {
   $('#saveNote').textContent = (r.fareSaved ? `一日券のおかげで、通常なら約${yen(r.fareSaved)}かかる電車賃が0円になっています。` : '今回のルートは徒歩のみです（一日券はバス移動などにもご利用いただけます）。') +
     `　歩く時間の合計：約${fmtDur(r.walkTotal)}` + (state.rain ? '（雨の日モード：地下鉄を優先しています）' : '');
   const on = r.orderNote;
-  $('#warns').innerHTML = (on ? `<div class="infobox"><b>この順番について</b><br>${
+  let customNote = '';
+  if (r.custom) {
+    const diff = (r.endMin - r.startMin) - r.autoDur;
+    customNote = `<div class="infobox"><b>自分で並べた順番です</b><br>${
+      diff > 0 ? `おすすめ順より約${diff}分長くなります。` : diff < 0 ? `おすすめ順より約${-diff}分短くなります（おすすめ順は、拝観時間や混雑を考慮しています）。` : 'おすすめ順と同じ所要時間です。'
+    }<br><button class="btn small" data-order="auto">おすすめ順に戻す</button></div>`;
+  }
+  $('#orderMode').innerHTML = `<div class="seg" role="group" aria-label="回る順番">
+      <button data-order="auto" aria-pressed="${!r.custom}">おすすめ順（自動）</button>
+      <button data-order="custom" aria-pressed="${!!r.custom}">自分で並べる</button>
+    </div>${r.custom ? '<p class="order-hint">▲▼ボタンで順番を入れ替えられます。電車・時刻・費用は自動で計算し直します。</p>' : ''}`;
+  $('#warns').innerHTML = customNote + (on ? `<div class="infobox"><b>この順番について</b><br>${
       on.reasons.length ? esc(on.reasons.join('、')) + '、' : '拝観時間や混雑を考慮して、'
     }最短の順番より約${on.extra}分長い順番にしています。</div>` : '') +
     planWarns(r).map(w => `<div class="warnbox">⚠ ${esc(w)}</div>`).join('');
@@ -1135,8 +1173,12 @@ function renderRoute() {
     }
     const s = it.node;
     const feeTxt = s.cat === 'food' ? `食事目安 ${yen(s.fee || 0)}` : (s.fee ? `拝観料 ${yen(s.fee)}` : '拝観無料');
-    return `<li class="tl-stop"><div class="tl-time">${fmtTime(it.start)}</div><div class="tl-card">
-      <h3><span class="num">${it.no}</span>${esc(s.name)}</h3>
+    const n = r.order.length;
+    const move = r.custom ? `<span class="move no-print">
+        <button data-move="-1" data-idx="${it.no - 1}" aria-label="${esc(s.name)}をひとつ前へ" ${it.no === 1 ? 'disabled' : ''}>▲</button>
+        <button data-move="1" data-idx="${it.no - 1}" aria-label="${esc(s.name)}をひとつ後ろへ" ${it.no === n ? 'disabled' : ''}>▼</button></span>` : '';
+    return `<li class="tl-stop"><div class="tl-time">${fmtTime(it.start)}</div><div class="tl-card" data-card="${it.no - 1}">
+      <h3><span class="num">${it.no}</span><span style="min-width:0">${esc(s.name)}</span>${move}</h3>
       <div class="sub">滞在 約${s.stay || 30}分（〜${fmtTime(it.depart)}）${it.wait ? `／開門まで${it.wait}分待ち` : ''}</div>
       <div class="fee">${esc(feeTxt)}${s.feeNote ? `<small style="color:var(--muted)">（${esc(s.feeNote)}）</small>` : ''}</div>
       ${it.warn ? `<div class="warnbox">⚠ ${esc(it.warn)}</div>` : ''}
@@ -1261,8 +1303,22 @@ function renderAll() { renderHeader(); renderMode(); renderPresets(); renderChip
    イベント
    ========================================================= */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-toggle],[data-area],[data-cat],[data-preset],[data-tab],[data-go],[data-season]');
+  const t = e.target.closest('[data-toggle],[data-area],[data-cat],[data-preset],[data-tab],[data-go],[data-season],[data-order],[data-move]');
   if (!t) return;
+  if (t.dataset.order) {
+    if (t.dataset.order === 'custom' && !state.customOrder && state.route) { state.customOrder = state.route.order.slice(); toast('▲▼ボタンで順番を入れ替えられます'); }
+    else if (t.dataset.order === 'auto' && state.customOrder) { state.customOrder = null; toast('おすすめ順に戻しました'); }
+    saveState(); buildRoute(); return;
+  }
+  if (t.dataset.move) {
+    const i = +t.dataset.idx, j = i + (+t.dataset.move), o = state.customOrder;
+    if (!o || j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]];
+    saveState(); buildRoute();
+    const card = document.querySelector(`[data-card="${j}"]`);
+    if (card) { card.classList.add('flash'); const btn = card.querySelector(`[data-move="${t.dataset.move}"]:not([disabled])`) || card.querySelector('[data-move]:not([disabled])'); if (btn) btn.focus({ preventScroll: true }); card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    return;
+  }
   if (t.dataset.toggle) toggleSpot(t.dataset.toggle);
   else if (t.dataset.season) setMode({ season: t.dataset.season });
   else if (t.dataset.area) { state.area = t.dataset.area; renderChips(); renderCards(); }
@@ -1270,6 +1326,7 @@ document.addEventListener('click', e => {
   else if (t.dataset.preset) {
     const p = PRESETS[+t.dataset.preset];
     state.selected = p.ids.filter(id => SPOT[id] && !custom.hidden.includes(id));
+    state.customOrder = null;
     state.area = 'all'; state.cat = 'all'; saveState(); renderChips(); renderCards();
     toast(`「${p.name}」の${state.selected.length}か所を選びました`);
   }
@@ -1582,6 +1639,7 @@ rebuildSpots();
   const r = location.hash.match(/r=([01])/); if (r) state.ret = r[1] === '1';
   const k = location.hash.match(/k=(\w+)/); if (k && SEASONS[k[1]]) state.season = k[1];
   const w = location.hash.match(/w=([01])/); if (w) state.rain = w[1] === '1';
+  state.customOrder = /o=1/.test(location.hash) ? state.selected.slice() : null;
   state.fromHash = true;
 })();
 renderAll();
