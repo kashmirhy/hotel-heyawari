@@ -1,0 +1,14 @@
+{
+  "name": "山科・醍醐 歴史さんぽ（加茂川館）",
+  "short_name": "歴史さんぽ",
+  "description": "加茂川館から地下鉄・バス一日券で巡る、山科・醍醐の観光ルート作成アプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f3ec",
+  "theme_color": "#7a2a36",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
