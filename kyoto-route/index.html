@@ -329,7 +329,7 @@ details.more .tip{background:var(--surface-2);border-radius:8px;padding:6px 10px
       <p>一日券で乗れる交通機関は<b>0円</b>で計算しています。拝観料・食事代は目安です。参考として、一日券がなかった場合の通常運賃も表示しています。</p>
     </div>
     <div class="panel" id="contactBox" hidden></div>
-    <p class="foot"><button class="btn small" id="adminOpen">スポット管理（ホテルご担当者様向け）</button></p>
+    <p class="foot" id="footMark">加茂川館</p>
   </section>
 </main>
 
@@ -1304,9 +1304,80 @@ $('#shareBtn').addEventListener('click', async () => {
 function openModal(html) { $('#sheet').innerHTML = html; $('#modal').hidden = false; document.body.style.overflow = 'hidden'; }
 function closeModal() { $('#modal').hidden = true; document.body.style.overflow = ''; pickMap = null; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
-$('#adminOpen').addEventListener('click', openAdmin);
+
+/* ---- 管理者パスコード ----
+   静的なHTMLのため完全な保護ではありません（管理画面での変更はその端末にのみ保存され、
+   ゲストの画面には「配布用HTMLを書き出す」で作ったファイルを置き換えたときだけ反映されます）。
+   パスコードはハッシュ値（SHA-256）で保持し、平文は埋め込みません。初期パスコード：kamogawakan */
+const ADMIN_SALT = 'kamogawakan-route:';
+const DEFAULT_ADMIN_HASH = 'f7674f63eb8a41774fe0504018e61128ba72fc55620aee26551fda252580bdce';
+const SS_ADMIN = 'kamogawakan-route-admin';
+function sha256Hex(str) {
+  const rr = (v, n) => (v >>> n) | (v << (32 - n));
+  const K = []; for (let n = 2, c = 0; c < 64; n++) { let p = true; for (let d = 2; d * d <= n; d++) if (n % d === 0) { p = false; break; } if (p) K[c++] = (Math.pow(n, 1 / 3) % 1) * 4294967296 | 0; }
+  const H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const bytes = new TextEncoder().encode(str), l = bytes.length, total = Math.ceil((l + 9) / 64) * 64;
+  const m = new Uint8Array(total); m.set(bytes); m[l] = 0x80;
+  const dv = new DataView(m.buffer); dv.setUint32(total - 4, (l * 8) >>> 0); dv.setUint32(total - 8, Math.floor(l * 8 / 4294967296));
+  const w = new Array(64);
+  for (let i = 0; i < total; i += 64) {
+    for (let j = 0; j < 16; j++) w[j] = dv.getUint32(i + j * 4);
+    for (let j = 16; j < 64; j++) {
+      const s0 = rr(w[j - 15], 7) ^ rr(w[j - 15], 18) ^ (w[j - 15] >>> 3), s1 = rr(w[j - 2], 17) ^ rr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+      w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let j = 0; j < 64; j++) {
+      const t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[j] + w[j]) | 0;
+      const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    [a, b, c, d, e, f, g, h].forEach((v, k) => { H[k] = (H[k] + v) | 0; });
+  }
+  return H.map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+function adminHash() { return custom.settings.adminHash || DEFAULT_ADMIN_HASH; }
+function isAdmin() { try { return sessionStorage.getItem(SS_ADMIN) === adminHash(); } catch (e) { return !!isAdmin.mem && isAdmin.mem === adminHash(); } }
+function setAdmin(on) { const v = on ? adminHash() : ''; isAdmin.mem = v; try { on ? sessionStorage.setItem(SS_ADMIN, v) : sessionStorage.removeItem(SS_ADMIN); } catch (e) {} }
+const loginGuard = { fails: 0, until: 0 };
+function requestAdmin() {
+  if (isAdmin()) return openAdmin();
+  openModal(`<div class="sheet-head"><h2>管理者ログイン</h2><button class="btn small" data-close>閉じる</button></div>
+    <form class="form" id="loginForm" autocomplete="off">
+      <p style="margin:0;font-size:14px">スポット管理はホテルご担当者様専用です。パスコードを入力してください。</p>
+      <label>パスコード<input id="adminPass" type="password" autocomplete="current-password" required></label>
+      <p id="loginMsg" style="margin:0;font-size:13px;color:#b3261e" aria-live="polite"></p>
+      <button class="btn primary" type="submit">ログイン</button>
+    </form>`);
+  setTimeout(() => { const i = $('#adminPass'); if (i) i.focus(); }, 50);
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'loginForm') return;
+  e.preventDefault();
+  const msg = $('#loginMsg'), now = Date.now();
+  if (now < loginGuard.until) { msg.textContent = `入力を続けて間違えたため、${Math.ceil((loginGuard.until - now) / 1000)}秒後にもう一度お試しください。`; return; }
+  if (sha256Hex(ADMIN_SALT + $('#adminPass').value) === adminHash()) {
+    loginGuard.fails = 0; setAdmin(true); openAdmin(); toast('管理者としてログインしました');
+  } else {
+    loginGuard.fails++;
+    if (loginGuard.fails >= 5) { loginGuard.until = now + 60000; loginGuard.fails = 0; msg.textContent = '5回間違えたため、1分間ログインできません。'; }
+    else msg.textContent = 'パスコードが違います。';
+    $('#adminPass').value = '';
+  }
+});
+// 入口はゲストに見せない：画面下の「加茂川館」を5回続けてタップ、またはURLの末尾に #admin を付けて開く
+(function () {
+  let taps = [];
+  $('#footMark').addEventListener('click', () => {
+    const now = Date.now(); taps = taps.filter(t => now - t < 3000); taps.push(now);
+    if (taps.length >= 5) { taps = []; requestAdmin(); }
+  });
+  const byHash = () => { if (location.hash === '#admin') requestAdmin(); };
+  window.addEventListener('hashchange', byHash); setTimeout(byHash, 0);
+})();
 
 function openAdmin() {
+  if (!isAdmin()) return requestAdmin();
   const st = custom.settings;
   const rows = SPOTS.map(s => {
     const hid = custom.hidden.includes(s.id);
@@ -1315,7 +1386,8 @@ function openAdmin() {
       <button class="btn small" data-hide="${esc(s.id)}">${hid ? '表示' : '非表示'}</button>
       ${s.custom ? `<button class="btn small danger" data-del="${esc(s.id)}">削除</button>` : ''}</div>`;
   }).join('');
-  openModal(`<div class="sheet-head"><h2>スポット管理</h2><button class="btn small" data-close>閉じる</button></div>
+  openModal(`<div class="sheet-head"><h2>スポット管理</h2><span style="display:flex;gap:6px"><button class="btn small" id="adminLogout">ログアウト</button><button class="btn small" data-close>閉じる</button></span></div>
+    ${st.adminHash ? '' : '<div class="warnbox">初期パスコードのままです。下の「管理者パスコードの変更」から変更してください。</div>'}
     <div class="panel"><h3 style="font-size:15px;margin-bottom:8px">ホテル・プラン設定</h3>
       <div class="form">
         <label>プラン名（画面上部に表示）<input id="setPlan" value="${esc(st.planName || '')}" placeholder="加茂川館 宿泊プラン特典"></label>
@@ -1338,13 +1410,33 @@ function openAdmin() {
       <div class="form"><label>アプリを公開したURL<input id="qrUrl" value="${esc(location.protocol.startsWith('http') ? location.href.split('#')[0] : '')}" placeholder="https://..."></label>
       <button class="btn" id="makeQr">QRコードを表示</button></div>
       <div id="qrBox" hidden></div>
+    </div>
+    <div class="panel"><h3 style="font-size:15px;margin-bottom:6px">管理者パスコードの変更</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 8px">変更後は「配布用HTMLを書き出す」で作ったファイルにも新しいパスコードが反映されます。忘れないようにご注意ください。</p>
+      <div class="form">
+        <div class="two"><label>新しいパスコード（4文字以上）<input id="newPass" type="password" autocomplete="new-password"></label>
+        <label>確認のためもう一度<input id="newPass2" type="password" autocomplete="new-password"></label></div>
+        <button class="btn" id="changePass">パスコードを変更</button>
+      </div>
     </div>`);
 }
 
+const ADMIN_ACTIONS = ['saveSettings', 'exportHtml', 'exportJson', 'resetLocal', 'makeQr', 'saveSpot', 'autoAccessBtn', 'backAdmin', 'changePass', 'adminLogout'];
 document.addEventListener('click', e => {
   const t = e.target;
+  const isAdminAction = ADMIN_ACTIONS.includes(t.id) || (t.dataset && ('edit' in t.dataset || t.dataset.hide || t.dataset.del));
+  if (!isAdminAction) return;
+  if (!isAdmin()) { requestAdmin(); return; }
+  if (t.id === 'adminLogout') { setAdmin(false); closeModal(); toast('ログアウトしました'); return; }
+  if (t.id === 'changePass') {
+    const p1 = $('#newPass').value, p2 = $('#newPass2').value;
+    if (p1.length < 4) return toast('パスコードは4文字以上にしてください');
+    if (p1 !== p2) return toast('確認用のパスコードが一致しません');
+    custom.settings.adminHash = sha256Hex(ADMIN_SALT + p1); saveCustom(); setAdmin(true); openAdmin(); toast('パスコードを変更しました');
+    return;
+  }
   if (t.id === 'saveSettings') {
-    custom.settings = { planName: $('#setPlan').value.trim(), message: $('#setMsg').value.trim(), phone: $('#setPhone').value.trim(), contactNote: $('#setContact').value.trim() };
+    custom.settings = { ...custom.settings, planName: $('#setPlan').value.trim(), message: $('#setMsg').value.trim(), phone: $('#setPhone').value.trim(), contactNote: $('#setContact').value.trim() };
     saveCustom(); toast('設定を保存しました');
   } else if (t.dataset && 'edit' in t.dataset) { openEditor(t.dataset.edit); }
   else if (t.dataset && t.dataset.hide) {
@@ -1365,6 +1457,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'importJson') {
+    if (!isAdmin()) return requestAdmin();
     const f = e.target.files[0]; if (!f) return;
     f.text().then(txt => { custom = normalizeCustom(JSON.parse(txt)); saveCustom(); openAdmin(); toast('データを読み込みました'); }).catch(() => toast('読み込みに失敗しました'));
   }
@@ -1381,6 +1474,7 @@ let pickMap = null, pickMarker = null;
 function movePick(la, ln) { if (pickMap && window.L) { if (!pickMarker) pickMarker = L.marker([la, ln]).addTo(pickMap); else pickMarker.setLatLng([la, ln]); pickMap.setView([la, ln], 15); } }
 
 function openEditor(id) {
+  if (!isAdmin()) return requestAdmin();
   const s = id ? SPOT[id] : null;
   const v = s || { cat: 'history', area: 'daigo', stay: 30, fee: 0, crowd: 1 };
   const a0 = (v.access && v.access[0]) || {};
@@ -1410,7 +1504,7 @@ function openEditor(id) {
       <label style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">混雑しやすい季節：${Object.entries(SEASONS).map(([k, sv]) => `<span><input type="checkbox" id="fPeak_${k}" ${(v.peak || []).includes(k) ? 'checked' : ''}> ${sv.label}</span>`).join('')}</label>
       <div class="two"><label>冬期（12〜2月）の終了<input id="fWClose" type="time" value="${esc((v.winter || {}).close || '')}"></label><label>冬期の最終受付<input id="fWLast" type="time" value="${esc((v.winter || {}).lastEntry || '')}"></label></div>
       <button class="btn primary" id="saveSpot">保存する</button>
-      ${s && s.builtin && custom.overrides[s.id] ? `<button class="btn" type="button" onclick="delete custom.overrides['${esc(s.id)}'];saveCustom();openAdmin();toast('初期状態に戻しました')">初期状態に戻す</button>` : ''}
+      ${s && s.builtin && custom.overrides[s.id] ? `<button class="btn" type="button" onclick="if(isAdmin()){delete custom.overrides['${esc(s.id)}'];saveCustom();openAdmin();toast('初期状態に戻しました')}">初期状態に戻す</button>` : ''}
     </div>`);
   loadLeaflet().then(L => {
     const el = $('#pickMap'); if (!el) return; el.innerHTML = '';
